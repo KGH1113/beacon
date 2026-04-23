@@ -17,10 +17,10 @@ import {
   YAxis,
 } from "recharts";
 
+import { DetailPageHeader } from "@/components/detail-page-header";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -63,16 +63,16 @@ export function SystemOverviewSection() {
 
   return (
     <section className="flex flex-col gap-4">
+      <DetailPageHeader
+        description={getSystemDescription()}
+        status={{
+          label: getSystemStatusLabel(mockSystemOverview.status),
+          className: "bg-chart-2/20 text-chart-2",
+        }}
+        title="System"
+      />
+
       <Card>
-        <CardHeader>
-          <CardTitle>{mockSystemOverview.hostname}</CardTitle>
-          <CardDescription>{getSystemDescription()}</CardDescription>
-          <CardAction>
-            <Badge className="bg-chart-2/20 text-chart-2" variant="secondary">
-              {getSystemStatusLabel(mockSystemOverview.status)}
-            </Badge>
-          </CardAction>
-        </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           <SystemSummaryMetric
             label="Uptime"

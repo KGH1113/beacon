@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { DetailPageHeader } from "@/components/detail-page-header";
+
 export function PageSection({
   title,
   description,
@@ -11,10 +13,7 @@ export function PageSection({
 }) {
   return (
     <section className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
+      <DetailPageHeader description={description} title={title} />
       {children}
     </section>
   );
