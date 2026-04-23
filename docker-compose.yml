@@ -1,0 +1,25 @@
+services:
+  panel:
+    build:
+      context: .
+      dockerfile: ./apps/panel/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - BEACON_DAEMON_URL=http://host.docker.internal:7300
+      - BEACON_PANEL_URL=http://localhost:3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # 초기 권장안은 daemon 을 systemd 로 두는 것.
+  # 필요해지면 아래처럼 compose 서비스로 옮길 수 있다.
+  # daemon:
+  #   build:
+  #     context: .
+  #     dockerfile: ./apps/daemon/Dockerfile
+  #   ports:
+  #     - "7300:7300"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - /srv/beacon-shares:/srv/beacon-shares

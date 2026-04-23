@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output and caches
+.next/
+.turbo/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+*.log
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Runtime data
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Host-local config
+config/minecraft-servers.json
+config/share-roots.json
+
+# OS files
+.DS_Store
