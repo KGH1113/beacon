@@ -1,0 +1,96 @@
+name: Deploy (Guhyeon Kang's Home Server)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+jobs:
+  deploy-main:
+    name: Deploy main to home server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Connect to Tailscale (Guhyeon Kang's Tailnet)
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:gh-runner
+          ping: kgh
+
+      - name: Verify connectivity
+        run: |
+          set -euo pipefail
+          tailscale status
+          ssh -o StrictHostKeyChecking=no kgh@kgh "whoami && hostname"
+
+      - name: Deploy panel and daemon
+        run: |
+          set -euo pipefail
+          ssh -o StrictHostKeyChecking=no kgh@kgh 'bash -s' <<'REMOTE'
+          set -euo pipefail
+
+          DEPLOY_DIR="/srv/beacon"
+          DAEMON_UNIT="beacon-daemon.service"
+
+          command -v bun >/dev/null || {
+            echo "Missing required command: bun"
+            exit 1
+          }
+
+          command -v git >/dev/null || {
+            echo "Missing required command: git"
+            exit 1
+          }
+
+          command -v docker >/dev/null || {
+            echo "Missing required command: docker"
+            exit 1
+          }
+
+          docker compose version >/dev/null || {
+            echo "Missing required Docker Compose plugin: docker compose"
+            exit 1
+          }
+
+          command -v systemctl >/dev/null || {
+            echo "Missing required command: systemctl"
+            exit 1
+          }
+
+          test -d "$DEPLOY_DIR" || {
+            echo "Missing deploy directory: $DEPLOY_DIR"
+            exit 1
+          }
+
+          cd "$DEPLOY_DIR"
+
+          git fetch origin main
+          git checkout main
+          git reset --hard origin/main
+
+          test -f docker-compose.yml || {
+            echo "Missing docker-compose.yml in $DEPLOY_DIR"
+            exit 1
+          }
+
+          test -f apps/panel/Dockerfile || {
+            echo "Missing apps/panel/Dockerfile. Add it before enabling panel compose deploy."
+            exit 1
+          }
+
+          bun install --frozen-lockfile
+          bun run lint
+          bun run typecheck
+          bun run build
+
+          sudo systemctl restart "$DAEMON_UNIT"
+          docker compose up -d --build panel
+          REMOTE
