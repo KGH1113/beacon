@@ -179,7 +179,7 @@ export function SharesPage() {
         title="Shares"
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="flex min-w-0 items-stretch gap-4 overflow-x-auto">
         <SummaryCard label="Active links" value={summary.activeCount} />
         <SummaryCard label="Expiring soon" value={summary.expiringCount} />
         <SummaryCard label="Permanent" value={summary.permanentCount} />
@@ -205,7 +205,7 @@ export function SharesPage() {
 
 function SummaryCard({ label, value }: { label: string; value: number }) {
   return (
-    <Card className="flex min-h-0 flex-col">
+    <Card className="flex min-h-0 min-w-48 flex-1 flex-col">
       <CardHeader>
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-3xl">{value}</CardTitle>

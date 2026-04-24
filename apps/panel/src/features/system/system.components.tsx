@@ -18,6 +18,7 @@ import {
 } from "recharts";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
+import { SummaryMetric } from "@/components/summary-metric";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -73,16 +74,19 @@ export function SystemOverviewSection() {
       />
 
       <Card>
-        <CardContent className="grid gap-4 md:grid-cols-3">
-          <SystemSummaryMetric
+        <CardContent className="flex min-w-0 items-start gap-4 overflow-x-auto">
+          <SummaryMetric
+            className="min-w-32 flex-1"
             label="Uptime"
             value={mockSystemOverview.uptimeLabel}
           />
-          <SystemSummaryMetric
+          <SummaryMetric
+            className="min-w-32 flex-1"
             label="RX"
             value={formatMbps(latestNetworkSample.rxMbps)}
           />
-          <SystemSummaryMetric
+          <SummaryMetric
+            className="min-w-32 flex-1"
             label="TX"
             value={formatMbps(latestNetworkSample.txMbps)}
           />
@@ -100,21 +104,6 @@ export function SystemOverviewSection() {
         <OpenPortsCard />
       </div>
     </section>
-  );
-}
-
-function SystemSummaryMetric({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="font-medium text-xl">{value}</span>
-    </div>
   );
 }
 

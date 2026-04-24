@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/utils";
 
 import "./globals.css";
+import "@xterm/xterm/css/xterm.css";
 
 const fontSans = Inter({
   subsets: ["latin"],
