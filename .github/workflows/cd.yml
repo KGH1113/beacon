@@ -40,10 +40,17 @@ jobs:
           DEPLOY_DIR="/srv/beacon"
           DAEMON_UNIT="beacon-daemon.service"
 
+          export BUN_INSTALL="$HOME/.bun"
+          export PATH="$BUN_INSTALL/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+
           command -v bun >/dev/null || {
             echo "Missing required command: bun"
+            echo "Bun may be installed, but it is not available in this non-interactive SSH PATH."
+            echo "Current PATH: $PATH"
             exit 1
           }
+
+          bun --version
 
           command -v git >/dev/null || {
             echo "Missing required command: git"
