@@ -86,14 +86,35 @@ export function createShareFileIntegration(): ShareFileIntegration {
 }
 
 function loadShareRoots() {
-  const configPath = process.env.BEACON_SHARE_ROOTS_CONFIG
-    ? resolve(process.env.BEACON_SHARE_ROOTS_CONFIG)
-    : resolve(process.cwd(), "config/share-roots.json");
-  const examplePath = resolve(process.cwd(), "config/share-roots.example.json");
-  const sourcePath = existsSync(configPath) ? configPath : examplePath;
+  const sourcePath = findShareRootsConfigPath();
   const contents = readFileSync(sourcePath, "utf-8");
 
   return ShareRootsSchema.parse(JSON.parse(contents));
+}
+
+function findShareRootsConfigPath() {
+  if (process.env.BEACON_SHARE_ROOTS_CONFIG) {
+    return resolve(process.env.BEACON_SHARE_ROOTS_CONFIG);
+  }
+
+  const candidates = [
+    resolve(process.cwd(), "config/share-roots.json"),
+    resolve(process.cwd(), "config/share-roots.example.json"),
+    resolve(process.cwd(), "../../config/share-roots.json"),
+    resolve(process.cwd(), "../../config/share-roots.example.json"),
+  ];
+
+  const configPath = candidates.find((candidate) => existsSync(candidate));
+
+  if (!configPath) {
+    throw new AppError(
+      ErrorCode.NotFound,
+      "Share roots config was not found.",
+      500,
+    );
+  }
+
+  return configPath;
 }
 
 function getMimeType(filePath: string) {
