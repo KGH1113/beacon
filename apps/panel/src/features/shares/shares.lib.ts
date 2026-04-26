@@ -103,6 +103,10 @@ export function getShareHref(share: ShareDto) {
   return `/s/${share.token}`;
 }
 
+export function getShareDownloadUrl(share: ShareDto, baseUrl: string) {
+  return new URL(getShareHref(share), baseUrl).toString();
+}
+
 export function isShareExpiringSoon(share: ShareDto) {
   if (share.status !== "active" || !share.expiresAt) {
     return false;

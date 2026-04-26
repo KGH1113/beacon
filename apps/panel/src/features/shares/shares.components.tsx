@@ -5,16 +5,9 @@ import {
   FileIcon,
   FileTextIcon,
   ImageIcon,
-  UploadSimpleIcon,
   VideoIcon,
 } from "@phosphor-icons/react/ssr";
-import {
-  type DragEvent,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
@@ -56,12 +49,12 @@ import {
   filterShares,
   formatShareCreatedAt,
   formatShareExpiry,
+  getShareDownloadUrl,
   getShareHref,
   getShareStatusClassName,
   getShareStatusLabel,
   getSharesDescription,
   getSharesSummary,
-  mockShares,
 } from "./shares.lib";
 import { useSharesStore } from "./shares.store";
 
@@ -79,102 +72,56 @@ const previewIconByKind = {
   file: FileIcon,
 } satisfies Record<SharePreviewKind, typeof FileIcon>;
 
-export function SharesPage() {
+type SharesPageProps = {
+  daemonPublicBaseUrl: string;
+  initialShares: ShareDto[];
+  isFallback: boolean;
+};
+
+export function SharesPage({
+  daemonPublicBaseUrl,
+  initialShares,
+  isFallback,
+}: SharesPageProps) {
   const activeFilter = useSharesStore((state) => state.activeFilter);
   const selectedShareId = useSharesStore((state) => state.selectedShareId);
   const setActiveFilter = useSharesStore((state) => state.setActiveFilter);
   const setSelectedShareId = useSharesStore(
     (state) => state.setSelectedShareId,
   );
-  const dragDepthRef = useRef(0);
-  const [isDragActive, setDragActive] = useState(false);
+  const [shares, setShares] = useState(initialShares);
 
-  const summary = getSharesSummary(mockShares);
+  const summary = getSharesSummary(shares);
   const filteredShares = useMemo(
-    () => filterShares(mockShares, activeFilter),
-    [activeFilter],
+    () => filterShares(shares, activeFilter),
+    [activeFilter, shares],
   );
   const selectedShare =
-    mockShares.find((share) => share.id === selectedShareId) ??
+    shares.find((share) => share.id === selectedShareId) ??
     filteredShares[0] ??
     null;
 
-  function hasFiles(event: DragEvent<HTMLElement>) {
-    return Array.from(event.dataTransfer.types).includes("Files");
-  }
-
-  function handleDragEnter(event: DragEvent<HTMLElement>) {
-    if (!hasFiles(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    dragDepthRef.current += 1;
-    setDragActive(true);
-  }
-
-  function handleDragLeave(event: DragEvent<HTMLElement>) {
-    if (!hasFiles(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-
-    if (dragDepthRef.current === 0) {
-      setDragActive(false);
-    }
-  }
-
-  function handleDragOver(event: DragEvent<HTMLElement>) {
-    if (!hasFiles(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "copy";
-  }
-
-  function handleDrop(event: DragEvent<HTMLElement>) {
-    if (!hasFiles(event)) {
-      return;
-    }
-
-    event.preventDefault();
-    dragDepthRef.current = 0;
-    setDragActive(false);
-
-    const files = Array.from(event.dataTransfer.files);
-    if (files.length === 0) {
-      toast.info("No files were dropped");
-      return;
-    }
-
-    if (files.length === 1) {
-      toast.success(`Ready to share ${files[0]?.name ?? "file"}`, {
-        description: "Mock upload only. No file was transferred.",
-      });
-      return;
-    }
-
-    toast.success(`${files.length} files ready to share`, {
-      description: "Mock upload only. No files were transferred.",
-    });
+  function updateShare(updatedShare: ShareDto) {
+    setShares((currentShares) =>
+      currentShares.map((share) =>
+        share.id === updatedShare.id ? updatedShare : share,
+      ),
+    );
   }
 
   return (
-    <section
-      className="relative flex min-h-[calc(100svh-3rem)] flex-col gap-4"
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
+    <section className="relative flex min-h-[calc(100svh-3rem)] flex-col gap-4">
       <DetailPageHeader
-        description={getSharesDescription()}
+        description={
+          isFallback
+            ? `${getSharesDescription()} Daemon 연결 실패로 mock data 표시 중입니다.`
+            : getSharesDescription()
+        }
         status={{
-          label: `${summary.activeCount} active`,
-          className: "bg-chart-2/20 text-chart-2",
+          label: isFallback ? "Mock" : `${summary.activeCount} active`,
+          className: isFallback
+            ? "bg-chart-5/20 text-chart-5"
+            : "bg-chart-2/20 text-chart-2",
         }}
         title="Shares"
       />
@@ -195,10 +142,12 @@ export function SharesPage() {
           selectedShareId={selectedShare?.id ?? null}
         />
 
-        <ShareDetailCard share={selectedShare} />
+        <ShareDetailCard
+          daemonPublicBaseUrl={daemonPublicBaseUrl}
+          onShareUpdated={updateShare}
+          share={selectedShare}
+        />
       </div>
-
-      {isDragActive ? <DropOverlay /> : null}
     </section>
   );
 }
@@ -210,24 +159,6 @@ function SummaryCard({ label, value }: { label: string; value: number }) {
         <CardDescription>{label}</CardDescription>
         <CardTitle className="text-3xl">{value}</CardTitle>
       </CardHeader>
-    </Card>
-  );
-}
-
-function DropOverlay() {
-  return (
-    <Card className="pointer-events-none absolute inset-0 flex min-h-96 items-center justify-center bg-background/90">
-      <CardContent className="flex flex-col items-center gap-4 text-center">
-        <div className="flex size-14 items-center justify-center rounded-none bg-muted">
-          <UploadSimpleIcon />
-        </div>
-        <div className="flex flex-col gap-1">
-          <CardTitle>Drop files to create shares</CardTitle>
-          <CardDescription>
-            Mock upload only. Files will not be transferred yet.
-          </CardDescription>
-        </div>
-      </CardContent>
     </Card>
   );
 }
@@ -279,6 +210,16 @@ function SharesTableCard({
             </TableRow>
           </TableHeader>
           <TableBody>
+            {filteredShares.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  className="h-40 text-center text-muted-foreground"
+                  colSpan={5}
+                >
+                  표시할 공유 링크가 없습니다.
+                </TableCell>
+              </TableRow>
+            ) : null}
             {filteredShares.map((share) => (
               <TableRow
                 className={cn(
@@ -318,7 +259,15 @@ function SharesTableCard({
   );
 }
 
-function ShareDetailCard({ share }: { share: ShareDto | null }) {
+function ShareDetailCard({
+  daemonPublicBaseUrl,
+  onShareUpdated,
+  share,
+}: {
+  daemonPublicBaseUrl: string;
+  onShareUpdated: (share: ShareDto) => void;
+  share: ShareDto | null;
+}) {
   const [isPending, startTransition] = useTransition();
 
   if (!share) {
@@ -337,10 +286,12 @@ function ShareDetailCard({ share }: { share: ShareDto | null }) {
   const selectedShare = share;
 
   async function copyShareLink() {
+    const shareUrl = getShareDownloadUrl(selectedShare, daemonPublicBaseUrl);
+
     try {
-      await navigator.clipboard.writeText(getShareHref(selectedShare));
+      await navigator.clipboard.writeText(shareUrl);
       toast.success("Link copied", {
-        description: getShareHref(selectedShare),
+        description: shareUrl,
       });
     } catch {
       toast.error("Clipboard is not available");
@@ -354,6 +305,10 @@ function ShareDetailCard({ share }: { share: ShareDto | null }) {
       });
 
       if (result.ok) {
+        if (result.share) {
+          onShareUpdated(result.share);
+        }
+
         toast.info("Share revoked");
         return;
       }
@@ -411,8 +366,7 @@ function ShareDetailCard({ share }: { share: ShareDto | null }) {
               <AlertDialogHeader>
                 <AlertDialogTitle>Revoke this share?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  이 링크는 더 이상 다운로드에 사용할 수 없게 됩니다. 지금은
-                  daemon 연결 전이라 액션 골격만 실행됩니다.
+                  이 링크는 더 이상 다운로드에 사용할 수 없게 됩니다.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
