@@ -9,6 +9,21 @@ services:
       - NODE_ENV=production
       - BEACON_DAEMON_URL=http://host.docker.internal:7300
       - BEACON_PANEL_URL=http://localhost:3000
+      - NEXT_PUBLIC_DAEMON_BASE_URL=${NEXT_PUBLIC_DAEMON_BASE_URL:-http://localhost:7300}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles:
+      - tunnel
+    command:
+      - tunnel
+      - --no-autoupdate
+      - run
+      - --token
+      - ${CLOUDFLARED_TUNNEL_TOKEN:-}
     extra_hosts:
       - "host.docker.internal:host-gateway"
 

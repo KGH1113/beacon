@@ -266,10 +266,10 @@
 
 - daemon 을 Docker 로 띄울지 systemd 로 띄울지 최종 확정
 - Minecraft 상태 조회를 ping 기반으로 할지 query 기반으로도 볼지
-- 파일 공유 링크를 Tailscale 내부 전용으로 둘지, 이후 public tunnel 도 열지
+- 파일 공유 링크를 어느 public hostname 으로 노출할지
 
 현재 정보 기준으로는 아래를 권장한다.
 
 - daemon: systemd
 - Minecraft 상태: ping 우선, RCON 별도
-- 파일 공유: Tailscale 내부 전용 다운로드 링크부터 시작
+- 파일 공유: daemon 의 share endpoint 를 cloudflared tunnel 로 외부 공개

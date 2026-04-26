@@ -103,4 +103,10 @@ jobs:
 
           sudo systemctl restart "$DAEMON_UNIT"
           docker compose up -d --build panel
+
+          if { [ -n "${CLOUDFLARED_TUNNEL_TOKEN:-}" ] || { [ -f .env ] && grep -Eq '^CLOUDFLARED_TUNNEL_TOKEN=.+$' .env; }; }; then
+            docker compose --profile tunnel up -d cloudflared
+          else
+            echo "Skipping cloudflared: set CLOUDFLARED_TUNNEL_TOKEN in $DEPLOY_DIR/.env to enable the public share tunnel."
+          fi
           REMOTE
