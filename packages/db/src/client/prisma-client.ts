@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { PrismaClient } from "@prisma/client";
 
@@ -11,7 +11,11 @@ export function getPrismaClient(): PrismaClient {
 }
 
 function ensureDatabaseUrl() {
-  process.env.DATABASE_URL ??= `file:${join(process.cwd(), "data", "beacon.db")}`;
+  process.env.DATABASE_URL ??= `file:${join(
+    findWorkspaceRoot(),
+    "data",
+    "beacon.db",
+  )}`;
 
   if (!process.env.DATABASE_URL.startsWith("file:")) {
     return;
@@ -24,4 +28,24 @@ function ensureDatabaseUrl() {
   }
 
   mkdirSync(dirname(databasePath), { recursive: true });
+}
+
+function findWorkspaceRoot() {
+  let current = process.cwd();
+
+  for (let depth = 0; depth < 5; depth += 1) {
+    if (existsSync(join(current, "turbo.json"))) {
+      return current;
+    }
+
+    const parent = dirname(current);
+
+    if (parent === current) {
+      return process.cwd();
+    }
+
+    current = parent;
+  }
+
+  return process.cwd();
 }
