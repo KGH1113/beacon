@@ -1,3 +1,6 @@
+"use client";
+
+import type { SystemOverviewDto } from "@beacon/shared";
 import type { Icon, IconProps } from "@phosphor-icons/react";
 import { CubeIcon, FileIcon, GearSixIcon } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
@@ -16,20 +19,40 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/utils";
 
+import { useSystemOverviewStream } from "../system/system.hooks";
 import {
   type DashboardModule,
   type DashboardModuleSymbol,
   getDashboardDescription,
-  mockDashboardModules,
+  getDashboardModules,
 } from "./dashboard.lib";
 
-export function DashboardPage() {
+export function DashboardPage({
+  daemonStreamBaseUrl,
+  isSystemFallback,
+  systemOverview,
+}: {
+  daemonStreamBaseUrl: string;
+  isSystemFallback: boolean;
+  systemOverview?: SystemOverviewDto;
+}) {
+  const { overview, status } = useSystemOverviewStream(
+    systemOverview,
+    isSystemFallback,
+    daemonStreamBaseUrl,
+  );
+  const modules = getDashboardModules({
+    isSystemFallback,
+    systemOverview: overview,
+    systemStreamStatus: status,
+  });
+
   return (
     <div
       aria-label={getDashboardDescription()}
       className="grid min-h-[calc(100svh-3rem)] gap-4 md:grid-cols-2"
     >
-      {mockDashboardModules.map((module) => (
+      {modules.map((module) => (
         <DashboardModuleCard key={module.title} module={module} />
       ))}
     </div>
@@ -54,6 +77,8 @@ function DashboardModuleCard({
                 module.statusTone === "success" && "bg-chart-2/20 text-chart-2",
                 module.statusTone === "info" && "bg-chart-3/20 text-chart-3",
                 module.statusTone === "warning" && "bg-chart-4/20 text-chart-4",
+                module.statusTone === "danger" &&
+                  "bg-destructive/20 text-destructive",
               )}
               variant="secondary"
             >

@@ -114,7 +114,7 @@ export function getSystemStatusLabel(status: SystemOverviewDto["status"]) {
 
 export function getResourceMetric(
   id: SystemResourceMetricDto["id"],
-  overview = mockSystemOverview,
+  overview: SystemOverviewDto = mockSystemOverview,
 ) {
   const metric = overview.resources.find((resource) => resource.id === id);
 
