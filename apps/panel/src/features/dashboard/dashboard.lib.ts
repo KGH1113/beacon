@@ -1,9 +1,9 @@
-import type { SystemOverviewDto } from "@beacon/shared";
+import type { ShareDto, SystemOverviewDto } from "@beacon/shared";
 
 import { panelRoutes } from "@/routes";
 import { mockDockerContainers } from "../docker/docker.lib";
 import { mockMinecraftServers } from "../minecraft/minecraft.lib";
-import { mockShares } from "../shares/shares.lib";
+import { getSharesSummary, mockShares } from "../shares/shares.lib";
 import type { SystemOverviewStreamStatus } from "../system/system.hooks";
 import {
   getResourceMetric,
@@ -32,17 +32,22 @@ export type DashboardModule = {
 };
 
 export type DashboardModulesInput = {
+  isSharesFallback?: boolean;
   isSystemFallback?: boolean;
+  shares?: ShareDto[];
   systemOverview?: SystemOverviewDto;
   systemStreamStatus?: SystemOverviewStreamStatus;
 };
 
 export function getDashboardModules({
+  isSharesFallback = false,
   isSystemFallback = false,
+  shares = mockShares,
   systemOverview = mockSystemOverview,
 }: DashboardModulesInput = {}) {
   const cpuMetric = getResourceMetric("cpu", systemOverview);
   const memoryMetric = getResourceMetric("memory", systemOverview);
+  const shareSummary = getSharesSummary(shares);
 
   return [
     {
@@ -94,12 +99,12 @@ export function getDashboardModules({
       description: "File share links, expiry, and active downloads",
       href: panelRoutes.shares,
       symbol: "shares",
-      primaryValue: String(mockShares.length),
+      primaryValue: String(shares.length),
       primaryUnit: "lnk",
       primaryLabel: "Links",
-      secondaryMetric: "2 expiring this week",
-      status: "Available",
-      statusTone: "warning",
+      secondaryMetric: `${shareSummary.activeCount} active / ${shareSummary.totalDownloads} downloads`,
+      status: isSharesFallback ? "Mock" : getSharesStatusLabel(shareSummary),
+      statusTone: getSharesStatusTone(shareSummary, isSharesFallback),
     },
   ] satisfies DashboardModule[];
 }
@@ -125,4 +130,29 @@ function getSystemStatusTone(
   } satisfies Record<SystemOverviewDto["status"], DashboardStatusTone>;
 
   return tones[status];
+}
+
+function getSharesStatusLabel(
+  summary: ReturnType<typeof getSharesSummary>,
+): string {
+  if (summary.activeCount > 0) {
+    return "Available";
+  }
+
+  return "Empty";
+}
+
+function getSharesStatusTone(
+  summary: ReturnType<typeof getSharesSummary>,
+  isFallback: boolean,
+): DashboardStatusTone {
+  if (isFallback) {
+    return "warning";
+  }
+
+  if (summary.activeCount > 0) {
+    return "success";
+  }
+
+  return "info";
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import type { SystemOverviewDto } from "@beacon/shared";
+import type { ShareDto, SystemOverviewDto } from "@beacon/shared";
 import type { Icon, IconProps } from "@phosphor-icons/react";
 import { CubeIcon, FileIcon, GearSixIcon } from "@phosphor-icons/react/ssr";
 import Link from "next/link";
@@ -29,11 +29,15 @@ import {
 
 export function DashboardPage({
   daemonStreamBaseUrl,
+  isSharesFallback,
   isSystemFallback,
+  shares,
   systemOverview,
 }: {
   daemonStreamBaseUrl: string;
+  isSharesFallback: boolean;
   isSystemFallback: boolean;
+  shares: ShareDto[];
   systemOverview?: SystemOverviewDto;
 }) {
   const { overview, status } = useSystemOverviewStream(
@@ -42,7 +46,9 @@ export function DashboardPage({
     daemonStreamBaseUrl,
   );
   const modules = getDashboardModules({
+    isSharesFallback,
     isSystemFallback,
+    shares,
     systemOverview: overview,
     systemStreamStatus: status,
   });

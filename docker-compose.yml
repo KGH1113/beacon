@@ -8,7 +8,7 @@ services:
       - NODE_ENV=production
       - BEACON_DAEMON_URL=${BEACON_DAEMON_URL:-http://127.0.0.1:7300}
       - BEACON_PANEL_URL=${BEACON_PANEL_URL:-http://localhost:3000}
-      - NEXT_PUBLIC_DAEMON_BASE_URL=${NEXT_PUBLIC_DAEMON_BASE_URL:-http://localhost:7300}
+      - NEXT_PUBLIC_DAEMON_BASE_URL=${NEXT_PUBLIC_DAEMON_BASE_URL:-http://kgh:7300}
       - NEXT_PUBLIC_SHARE_BASE_URL=${NEXT_PUBLIC_SHARE_BASE_URL:-http://localhost:7300}
 
   cloudflared:
