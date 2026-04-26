@@ -2,6 +2,7 @@
 
 import type {
   SystemOpenPortDto,
+  SystemOverviewDto,
   SystemResourceMetricDto,
 } from "@beacon/shared";
 import {
@@ -54,21 +55,41 @@ import {
   systemNetworkChartConfig,
 } from "./system.lib";
 
-export function SystemOverviewSection() {
-  const latestNetworkSample = mockSystemOverview.networkSamples.at(-1) ??
-    mockSystemOverview.networkSamples[0] ?? {
+export function SystemOverviewSection({
+  overview = mockSystemOverview,
+  isFallback = false,
+}: {
+  overview?: SystemOverviewDto;
+  isFallback?: boolean;
+}) {
+  const latestNetworkSample = overview.networkSamples.at(-1) ??
+    overview.networkSamples[0] ?? {
       label: "now",
       rxMbps: 0,
       txMbps: 0,
     };
+  const description = isFallback
+    ? `${getSystemDescription()} daemon 연결 실패로 mock data를 표시합니다.`
+    : getSystemDescription();
 
   return (
     <section className="flex flex-col gap-4">
       <DetailPageHeader
-        description={getSystemDescription()}
+        description={description}
         status={{
-          label: getSystemStatusLabel(mockSystemOverview.status),
-          className: "bg-chart-2/20 text-chart-2",
+          label: isFallback ? "Mock" : getSystemStatusLabel(overview.status),
+          className: cn(
+            overview.status === "healthy" &&
+              !isFallback &&
+              "bg-chart-2/20 text-chart-2",
+            overview.status === "warning" &&
+              !isFallback &&
+              "bg-chart-4/20 text-chart-4",
+            overview.status === "critical" &&
+              !isFallback &&
+              "bg-destructive/20 text-destructive",
+            isFallback && "bg-chart-4/20 text-chart-4",
+          ),
         }}
         title="System"
       />
@@ -78,7 +99,7 @@ export function SystemOverviewSection() {
           <SummaryMetric
             className="min-w-32 flex-1"
             label="Uptime"
-            value={mockSystemOverview.uptimeLabel}
+            value={overview.uptimeLabel}
           />
           <SummaryMetric
             className="min-w-32 flex-1"
@@ -94,14 +115,14 @@ export function SystemOverviewSection() {
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {mockSystemOverview.resources.map((metric) => (
+        {overview.resources.map((metric) => (
           <ResourceGaugeCard key={metric.id} metric={metric} />
         ))}
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,1fr)]">
-        <NetworkThroughputCard />
-        <OpenPortsCard />
+        <NetworkThroughputCard overview={overview} />
+        <OpenPortsCard overview={overview} />
       </div>
     </section>
   );
@@ -179,7 +200,7 @@ function ResourceGaugeCard({ metric }: { metric: SystemResourceMetricDto }) {
   );
 }
 
-function NetworkThroughputCard() {
+function NetworkThroughputCard({ overview }: { overview: SystemOverviewDto }) {
   return (
     <Card>
       <CardHeader>
@@ -193,7 +214,7 @@ function NetworkThroughputCard() {
         >
           <AreaChart
             accessibilityLayer
-            data={mockSystemOverview.networkSamples}
+            data={overview.networkSamples}
             margin={{ left: 0, right: 12 }}
           >
             <CartesianGrid vertical={false} />
@@ -235,7 +256,7 @@ function NetworkThroughputCard() {
   );
 }
 
-function OpenPortsCard() {
+function OpenPortsCard({ overview }: { overview: SystemOverviewDto }) {
   return (
     <Card>
       <CardHeader>
@@ -254,7 +275,7 @@ function OpenPortsCard() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {mockSystemOverview.openPorts.map((port) => (
+            {overview.openPorts.map((port) => (
               <TableRow key={`${port.protocol}-${port.port}`}>
                 <TableCell className="font-medium">
                   {port.port}/{port.protocol}
