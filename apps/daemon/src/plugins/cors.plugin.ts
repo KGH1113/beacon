@@ -1,3 +1,5 @@
-import { Elysia } from "elysia";
+import { cors } from "@elysiajs/cors";
 
-export const corsPlugin = new Elysia({ name: "cors.plugin" });
+export const corsPlugin = cors({
+  origin: true,
+});

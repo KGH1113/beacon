@@ -34,6 +34,12 @@ export const GetSystemOverviewOutputSchema = z.object({
   overview: SystemOverviewDtoSchema,
 });
 
+export const SystemOverviewRealtimeEventDtoSchema = z.object({
+  type: z.literal("system.overview"),
+  timestamp: z.string().datetime(),
+  payload: SystemOverviewDtoSchema,
+});
+
 export type SystemResourceMetricDto = z.infer<
   typeof SystemResourceMetricDtoSchema
 >;
@@ -44,4 +50,7 @@ export type SystemOpenPortDto = z.infer<typeof SystemOpenPortDtoSchema>;
 export type SystemOverviewDto = z.infer<typeof SystemOverviewDtoSchema>;
 export type GetSystemOverviewOutput = z.infer<
   typeof GetSystemOverviewOutputSchema
+>;
+export type SystemOverviewRealtimeEventDto = z.infer<
+  typeof SystemOverviewRealtimeEventDtoSchema
 >;

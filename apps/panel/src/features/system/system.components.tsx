@@ -46,13 +46,16 @@ import {
 import { cn } from "@/utils";
 
 import {
+  type SystemOverviewStreamStatus,
+  useSystemOverviewStream,
+} from "./system.hooks";
+import {
   formatMbps,
   formatPercent,
   getNetworkChartSamples,
   getResourceChartConfig,
   getResourceGaugeData,
   getSystemDescription,
-  getSystemStatusLabel,
   mockSystemOverview,
   systemNetworkChartConfig,
 } from "./system.lib";
@@ -60,12 +63,16 @@ import {
 export function SystemOverviewSection({
   overview = mockSystemOverview,
   isFallback = false,
+  daemonStreamBaseUrl,
 }: {
   overview?: SystemOverviewDto;
   isFallback?: boolean;
+  daemonStreamBaseUrl: string;
 }) {
-  const latestNetworkSample = overview.networkSamples.at(-1) ??
-    overview.networkSamples[0] ?? {
+  const { overview: liveOverview, status: streamStatus } =
+    useSystemOverviewStream(overview, isFallback, daemonStreamBaseUrl);
+  const latestNetworkSample = liveOverview.networkSamples.at(-1) ??
+    liveOverview.networkSamples[0] ?? {
       label: "now",
       timestampMs: Date.now(),
       rxMbps: 0,
@@ -80,18 +87,13 @@ export function SystemOverviewSection({
       <DetailPageHeader
         description={description}
         status={{
-          label: isFallback ? "Mock" : getSystemStatusLabel(overview.status),
+          label: getStreamStatusLabel(streamStatus),
           className: cn(
-            overview.status === "healthy" &&
-              !isFallback &&
-              "bg-chart-2/20 text-chart-2",
-            overview.status === "warning" &&
-              !isFallback &&
+            streamStatus === "live" && "bg-chart-2/20 text-chart-2",
+            (streamStatus === "connecting" ||
+              streamStatus === "reconnecting") &&
               "bg-chart-4/20 text-chart-4",
-            overview.status === "critical" &&
-              !isFallback &&
-              "bg-destructive/20 text-destructive",
-            isFallback && "bg-chart-4/20 text-chart-4",
+            streamStatus === "mock" && "bg-muted text-muted-foreground",
           ),
         }}
         title="System"
@@ -102,7 +104,7 @@ export function SystemOverviewSection({
           <SummaryMetric
             className="min-w-32 flex-1"
             label="Uptime"
-            value={overview.uptimeLabel}
+            value={liveOverview.uptimeLabel}
           />
           <SummaryMetric
             className="min-w-32 flex-1"
@@ -118,17 +120,28 @@ export function SystemOverviewSection({
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        {overview.resources.map((metric) => (
+        {liveOverview.resources.map((metric) => (
           <ResourceGaugeCard key={metric.id} metric={metric} />
         ))}
       </div>
 
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,1fr)]">
-        <NetworkThroughputCard overview={overview} />
-        <OpenPortsCard overview={overview} />
+        <NetworkThroughputCard overview={liveOverview} />
+        <OpenPortsCard overview={liveOverview} />
       </div>
     </section>
   );
+}
+
+function getStreamStatusLabel(status: SystemOverviewStreamStatus) {
+  const labels = {
+    connecting: "Connecting",
+    live: "Live",
+    mock: "Mock",
+    reconnecting: "Reconnecting",
+  } satisfies Record<SystemOverviewStreamStatus, string>;
+
+  return labels[status];
 }
 
 function ResourceGaugeCard({ metric }: { metric: SystemResourceMetricDto }) {

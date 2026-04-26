@@ -13,3 +13,7 @@ export function getPanelEnv(): PanelEnv {
     NEXT_PUBLIC_DAEMON_BASE_URL: process.env.NEXT_PUBLIC_DAEMON_BASE_URL,
   });
 }
+
+export function getDaemonClientBaseUrl(env: PanelEnv = getPanelEnv()) {
+  return env.NEXT_PUBLIC_DAEMON_BASE_URL ?? env.BEACON_DAEMON_URL;
+}

@@ -1,7 +1,7 @@
 import { GetSystemOverviewOutputSchema } from "@beacon/shared";
 
 import { fetchDaemonJson } from "@/api-client";
-import { getPanelEnv } from "@/env";
+import { getDaemonClientBaseUrl, getPanelEnv } from "@/env";
 import { SystemOverviewSection } from "@/features/system/system.components";
 
 async function getSystemOverview() {
@@ -27,10 +27,15 @@ async function getSystemOverview() {
 
 export default async function SystemRoute() {
   const { overview, isFallback } = await getSystemOverview();
+  const daemonStreamBaseUrl = getDaemonClientBaseUrl();
 
   return (
     <main className="h-svh overflow-hidden p-6">
-      <SystemOverviewSection isFallback={isFallback} overview={overview} />
+      <SystemOverviewSection
+        daemonStreamBaseUrl={daemonStreamBaseUrl}
+        isFallback={isFallback}
+        overview={overview}
+      />
     </main>
   );
 }

@@ -1,6 +1,8 @@
 import {
   type GetSystemOverviewOutput,
   GetSystemOverviewOutputSchema,
+  type SystemOverviewRealtimeEventDto,
+  SystemOverviewRealtimeEventDtoSchema,
 } from "@beacon/shared";
 
 import {
@@ -10,6 +12,7 @@ import {
 
 export interface ISystemService {
   getOverview: () => Promise<GetSystemOverviewOutput>;
+  getOverviewRealtimeEvent: () => Promise<SystemOverviewRealtimeEventDto>;
 }
 
 export class SystemService implements ISystemService {
@@ -21,5 +24,15 @@ export class SystemService implements ISystemService {
     const overview = await this.integration.readOverview();
 
     return GetSystemOverviewOutputSchema.parse({ overview });
+  }
+
+  async getOverviewRealtimeEvent(): Promise<SystemOverviewRealtimeEventDto> {
+    const overview = await this.integration.readOverview();
+
+    return SystemOverviewRealtimeEventDtoSchema.parse({
+      type: "system.overview",
+      timestamp: new Date().toISOString(),
+      payload: overview,
+    });
   }
 }

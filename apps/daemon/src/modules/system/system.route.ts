@@ -7,4 +7,8 @@ const systemController = new SystemController();
 export const systemRoute = new Elysia({
   name: "system.route",
   prefix: "/system",
-}).get("/overview", () => systemController.getOverview());
+})
+  .get("/overview", () => systemController.getOverview())
+  .get("/overview/stream", ({ request }) =>
+    systemController.streamOverview(request.signal),
+  );
