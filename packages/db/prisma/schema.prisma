@@ -8,12 +8,14 @@ datasource db {
 }
 
 model Share {
-  id        String   @id @default(cuid())
-  token     String   @unique
-  filePath  String
-  fileName  String
-  expiresAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  token         String    @unique
+  filePath      String
+  fileName      String
+  sizeBytes     BigInt?
+  downloadCount Int       @default(0)
+  revokedAt     DateTime?
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
-

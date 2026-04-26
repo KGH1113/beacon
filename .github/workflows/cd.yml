@@ -78,6 +78,8 @@ jobs:
           }
 
           cd "$DEPLOY_DIR"
+          mkdir -p "$DEPLOY_DIR/data"
+          export DATABASE_URL="${DATABASE_URL:-file:$DEPLOY_DIR/data/beacon.db}"
 
           git fetch origin main
           git checkout main
@@ -94,6 +96,7 @@ jobs:
           }
 
           bun install --frozen-lockfile
+          bun run --filter @beacon/db db:migrate:deploy
           bun run lint
           bun run typecheck
           bun run --filter @beacon/daemon build
