@@ -12,9 +12,9 @@
   "scripts": {
     "db:generate": "prisma generate",
     "db:migrate:dev": "prisma migrate dev",
-    "build": "tsc --noEmit -p tsconfig.json",
+    "build": "bun run db:generate && tsc --noEmit -p tsconfig.json",
     "lint": "biome check .",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "bun run db:generate && tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@beacon/shared": "workspace:*",
