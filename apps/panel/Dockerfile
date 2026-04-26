@@ -1,9 +1,14 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1.3.11-alpine AS deps
+FROM oven/bun:1.3.11-alpine AS bun
+
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 ENV NEXT_TELEMETRY_DISABLED=1
+
+COPY --from=bun /usr/local/bin/bun /usr/local/bin/bun
+RUN ln -s /usr/local/bin/bun /usr/local/bin/bunx
 
 COPY package.json bun.lock bunfig.toml turbo.json tsconfig.base.json ./
 COPY apps/daemon/package.json ./apps/daemon/package.json

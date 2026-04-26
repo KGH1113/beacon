@@ -96,7 +96,7 @@ jobs:
           bun install --frozen-lockfile
           bun run lint
           bun run typecheck
-          bun run build
+          bun run --filter @beacon/daemon build
 
           sudo systemctl restart "$DAEMON_UNIT"
           docker compose up -d --build panel
