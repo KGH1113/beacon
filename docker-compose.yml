@@ -3,19 +3,18 @@ services:
     build:
       context: .
       dockerfile: ./apps/panel/Dockerfile
-    ports:
-      - "3000:3000"
+    network_mode: host
     environment:
       - NODE_ENV=production
-      - BEACON_DAEMON_URL=http://host.docker.internal:7300
-      - BEACON_PANEL_URL=http://localhost:3000
+      - BEACON_DAEMON_URL=${BEACON_DAEMON_URL:-http://127.0.0.1:7300}
+      - BEACON_PANEL_URL=${BEACON_PANEL_URL:-http://localhost:3000}
       - NEXT_PUBLIC_DAEMON_BASE_URL=${NEXT_PUBLIC_DAEMON_BASE_URL:-http://localhost:7300}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - NEXT_PUBLIC_SHARE_BASE_URL=${NEXT_PUBLIC_SHARE_BASE_URL:-http://localhost:7300}
 
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
+    network_mode: host
     profiles:
       - tunnel
     command:
@@ -24,8 +23,6 @@ services:
       - run
       - --token
       - ${CLOUDFLARED_TUNNEL_TOKEN:-}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
 
   # 초기 권장안은 daemon 을 systemd 로 두는 것.
   # 필요해지면 아래처럼 compose 서비스로 옮길 수 있다.

@@ -2,6 +2,8 @@ import type { z } from "zod";
 
 import { ApiError } from "./api-error";
 
+const defaultDaemonTimeoutMs = 2500;
+
 export async function fetchJson<TSchema extends z.ZodTypeAny>(
   input: RequestInfo | URL,
   schema: TSchema,
@@ -28,5 +30,6 @@ export async function fetchDaemonJson<TSchema extends z.ZodTypeAny>(
   return fetchJson(url, schema, {
     ...init,
     cache: init.cache ?? "no-store",
+    signal: init.signal ?? AbortSignal.timeout(defaultDaemonTimeoutMs),
   });
 }

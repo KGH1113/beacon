@@ -1,13 +1,13 @@
 import { ListSharesOutputSchema } from "@beacon/shared";
 
 import { fetchDaemonJson } from "@/api-client";
-import { getDaemonClientBaseUrl, getPanelEnv } from "@/env";
+import { getPanelEnv, getSharePublicBaseUrl } from "@/env";
 
 import { mockShares } from "./shares.lib";
 
 export async function fetchSharesForSsr() {
   const env = getPanelEnv();
-  const daemonPublicBaseUrl = getDaemonClientBaseUrl(env);
+  const daemonPublicBaseUrl = getSharePublicBaseUrl(env);
 
   try {
     const output = await fetchDaemonJson(
