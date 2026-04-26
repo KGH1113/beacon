@@ -5,6 +5,7 @@ import type {
   SystemOverviewDto,
   SystemResourceMetricDto,
 } from "@beacon/shared";
+import { useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -47,6 +48,7 @@ import { cn } from "@/utils";
 import {
   formatMbps,
   formatPercent,
+  getNetworkChartSamples,
   getResourceChartConfig,
   getResourceGaugeData,
   getSystemDescription,
@@ -65,6 +67,7 @@ export function SystemOverviewSection({
   const latestNetworkSample = overview.networkSamples.at(-1) ??
     overview.networkSamples[0] ?? {
       label: "now",
+      timestampMs: Date.now(),
       rxMbps: 0,
       txMbps: 0,
     };
@@ -73,7 +76,7 @@ export function SystemOverviewSection({
     : getSystemDescription();
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex h-full min-h-0 flex-col gap-4">
       <DetailPageHeader
         description={description}
         status={{
@@ -120,7 +123,7 @@ export function SystemOverviewSection({
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(360px,1fr)]">
         <NetworkThroughputCard overview={overview} />
         <OpenPortsCard overview={overview} />
       </div>
@@ -201,38 +204,78 @@ function ResourceGaugeCard({ metric }: { metric: SystemResourceMetricDto }) {
 }
 
 function NetworkThroughputCard({ overview }: { overview: SystemOverviewDto }) {
+  const [clientTimeZone, setClientTimeZone] = useState<string>();
+  const chartSamples = getNetworkChartSamples(
+    overview.networkSamples,
+    clientTimeZone,
+  );
+  const formatTick = (value: string | number) => {
+    const index = Number(value);
+    const sample = chartSamples[index];
+    const previousSample = chartSamples[index - 1];
+
+    if (!sample) {
+      return "";
+    }
+
+    if (
+      index === 0 ||
+      index === chartSamples.length - 1 ||
+      sample.label !== previousSample?.label
+    ) {
+      return sample.formattedLabel;
+    }
+
+    return "";
+  };
+
+  useEffect(() => {
+    setClientTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  }, []);
+
   return (
-    <Card>
+    <Card className="flex min-h-0 flex-col">
       <CardHeader>
         <CardTitle>Network</CardTitle>
         <CardDescription>Recent RX/TX throughput in Mbps</CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-0 flex-1">
         <ChartContainer
-          className="h-[300px] w-full"
+          className="h-full min-h-[280px] w-full"
           config={systemNetworkChartConfig}
         >
           <AreaChart
             accessibilityLayer
-            data={overview.networkSamples}
+            data={chartSamples}
             margin={{ left: 0, right: 12 }}
           >
             <CartesianGrid vertical={false} />
             <XAxis
               axisLine={false}
-              dataKey="label"
+              dataKey="sampleKey"
+              interval="preserveStartEnd"
+              minTickGap={24}
+              tickFormatter={formatTick}
               tickLine={false}
               tickMargin={8}
             />
             <YAxis
               axisLine={false}
+              domain={[0, "auto"]}
               tickFormatter={(value) => `${value}`}
               tickLine={false}
               tickMargin={8}
               width={36}
             />
             <ChartTooltip
-              content={<ChartTooltipContent indicator="line" />}
+              content={
+                <ChartTooltipContent
+                  indicator="line"
+                  labelFormatter={(_label, payload) =>
+                    payload[0]?.payload?.formattedLabel ?? ""
+                  }
+                />
+              }
               cursor={false}
             />
             <Area
@@ -240,14 +283,14 @@ function NetworkThroughputCard({ overview }: { overview: SystemOverviewDto }) {
               fill="var(--color-rxMbps)"
               fillOpacity={0.2}
               stroke="var(--color-rxMbps)"
-              type="natural"
+              type="monotone"
             />
             <Area
               dataKey="txMbps"
               fill="var(--color-txMbps)"
               fillOpacity={0.18}
               stroke="var(--color-txMbps)"
-              type="natural"
+              type="monotone"
             />
           </AreaChart>
         </ChartContainer>
@@ -258,17 +301,17 @@ function NetworkThroughputCard({ overview }: { overview: SystemOverviewDto }) {
 
 function OpenPortsCard({ overview }: { overview: SystemOverviewDto }) {
   return (
-    <Card>
+    <Card className="flex min-h-0 flex-col">
       <CardHeader>
         <CardTitle>Open Ports</CardTitle>
         <CardDescription>
           Listening services visible to the host
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-h-0 flex-1 overflow-auto">
         <Table>
           <TableHeader>
-            <TableRow>
+            <TableRow className="sticky top-0 z-10 bg-card">
               <TableHead>Port</TableHead>
               <TableHead>Service</TableHead>
               <TableHead className="text-right">Scope</TableHead>

@@ -83,7 +83,14 @@ class LinuxSystemIntegration implements SystemIntegration {
       networkSamples:
         networkSamples.length > 0
           ? networkSamples
-          : [{ label: getTimeLabel(new Date()), rxMbps: 0, txMbps: 0 }],
+          : [
+              {
+                label: getTimeLabel(new Date()),
+                timestampMs: Date.now(),
+                rxMbps: 0,
+                txMbps: 0,
+              },
+            ],
       openPorts: ports.value,
     };
   }
@@ -214,6 +221,7 @@ class LinuxSystemIntegration implements SystemIntegration {
     if (!previous) {
       this.pushNetworkSample({
         label: getTimeLabel(new Date(current.timestampMs)),
+        timestampMs: current.timestampMs,
         rxMbps: 0,
         txMbps: 0,
       });
@@ -228,6 +236,7 @@ class LinuxSystemIntegration implements SystemIntegration {
 
     this.pushNetworkSample({
       label: getTimeLabel(new Date(current.timestampMs)),
+      timestampMs: current.timestampMs,
       rxMbps: roundToOne(
         ((current.rxBytes - previous.rxBytes) * 8) / seconds / 1_000_000,
       ),

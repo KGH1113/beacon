@@ -29,7 +29,7 @@ export default async function SystemRoute() {
   const { overview, isFallback } = await getSystemOverview();
 
   return (
-    <main className="p-6">
+    <main className="h-svh overflow-hidden p-6">
       <SystemOverviewSection isFallback={isFallback} overview={overview} />
     </main>
   );

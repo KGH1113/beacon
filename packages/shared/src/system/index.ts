@@ -9,6 +9,7 @@ export const SystemResourceMetricDtoSchema = z.object({
 
 export const SystemNetworkSampleDtoSchema = z.object({
   label: z.string(),
+  timestampMs: z.number().int().nonnegative().optional(),
   rxMbps: z.number().min(0),
   txMbps: z.number().min(0),
 });

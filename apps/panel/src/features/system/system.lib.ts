@@ -1,5 +1,6 @@
 import type { ChartConfig } from "@/components/ui/chart";
 import type {
+  SystemNetworkSampleDto,
   SystemOverviewDto,
   SystemResourceMetricDto,
 } from "@beacon/shared";
@@ -29,13 +30,48 @@ export const mockSystemOverview = {
     },
   ],
   networkSamples: [
-    { label: "12:00", rxMbps: 12.8, txMbps: 3.2 },
-    { label: "12:05", rxMbps: 18.4, txMbps: 5.8 },
-    { label: "12:10", rxMbps: 16.1, txMbps: 4.6 },
-    { label: "12:15", rxMbps: 24.9, txMbps: 8.7 },
-    { label: "12:20", rxMbps: 21.3, txMbps: 6.1 },
-    { label: "12:25", rxMbps: 28.6, txMbps: 9.4 },
-    { label: "12:30", rxMbps: 19.7, txMbps: 5.5 },
+    {
+      label: "12:00",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 0),
+      rxMbps: 12.8,
+      txMbps: 3.2,
+    },
+    {
+      label: "12:05",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 5),
+      rxMbps: 18.4,
+      txMbps: 5.8,
+    },
+    {
+      label: "12:10",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 10),
+      rxMbps: 16.1,
+      txMbps: 4.6,
+    },
+    {
+      label: "12:15",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 15),
+      rxMbps: 24.9,
+      txMbps: 8.7,
+    },
+    {
+      label: "12:20",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 20),
+      rxMbps: 21.3,
+      txMbps: 6.1,
+    },
+    {
+      label: "12:25",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 25),
+      rxMbps: 28.6,
+      txMbps: 9.4,
+    },
+    {
+      label: "12:30",
+      timestampMs: Date.UTC(2026, 3, 26, 3, 30),
+      rxMbps: 19.7,
+      txMbps: 5.5,
+    },
   ],
   openPorts: [
     { port: 22, protocol: "tcp", service: "SSH", exposure: "tailscale" },
@@ -114,6 +150,36 @@ export function getResourceGaugeData(metric: SystemResourceMetricDto) {
       fill: "var(--color-usage)",
     },
   ];
+}
+
+export function getNetworkChartSamples(
+  samples: SystemNetworkSampleDto[],
+  timeZone?: string,
+) {
+  return samples.map((sample, index) => ({
+    ...sample,
+    formattedLabel: formatNetworkSampleTime(sample, timeZone),
+    sampleKey: `${index}`,
+  }));
+}
+
+function formatNetworkSampleTime(
+  sample: SystemNetworkSampleDto,
+  timeZone: string | undefined,
+) {
+  if (!timeZone) {
+    return sample.label;
+  }
+
+  if (typeof sample.timestampMs !== "number") {
+    return sample.label;
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone,
+  }).format(new Date(sample.timestampMs));
 }
 
 export function formatPercent(value: number) {
