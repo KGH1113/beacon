@@ -1,10 +1,15 @@
 import {
+  type GetSystemOverviewOutput,
+  GetSystemOverviewOutputSchema,
+} from "@beacon/shared";
+
+import {
   type SystemIntegration,
   createSystemIntegration,
 } from "../../integrations/system";
 
 export interface ISystemService {
-  getOverview: () => Promise<Record<string, unknown>>;
+  getOverview: () => Promise<GetSystemOverviewOutput>;
 }
 
 export class SystemService implements ISystemService {
@@ -12,9 +17,9 @@ export class SystemService implements ISystemService {
     private readonly integration: SystemIntegration = createSystemIntegration(),
   ) {}
 
-  async getOverview(): Promise<Record<string, unknown>> {
-    void this.integration;
+  async getOverview(): Promise<GetSystemOverviewOutput> {
+    const overview = await this.integration.readOverview();
 
-    return {};
+    return GetSystemOverviewOutputSchema.parse({ overview });
   }
 }

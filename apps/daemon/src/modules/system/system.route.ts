@@ -7,4 +7,4 @@ const systemController = new SystemController();
 export const systemRoute = new Elysia({
   name: "system.route",
   prefix: "/system",
-}).decorate("systemController", systemController);
+}).get("/overview", () => systemController.getOverview());
