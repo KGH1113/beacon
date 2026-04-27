@@ -34,6 +34,7 @@ export interface IDockerController {
 
 export class DockerController implements IDockerController {
   private readonly execSessions = new WeakMap<object, DockerExecSession>();
+  private readonly pendingExecInputs = new WeakMap<object, string[]>();
 
   constructor(private readonly service: IDockerService = new DockerService()) {}
 
@@ -188,6 +189,13 @@ export class DockerController implements IDockerController {
       )
       .then((session) => {
         this.execSessions.set(socket, session);
+        const pendingInputs = this.pendingExecInputs.get(socket) ?? [];
+
+        for (const input of pendingInputs) {
+          session.write(input);
+        }
+
+        this.pendingExecInputs.delete(socket);
       })
       .catch((error: unknown) => {
         send(
@@ -210,7 +218,12 @@ export class DockerController implements IDockerController {
 
     if (session) {
       session.write(parsed.payload.data);
+      return;
     }
+
+    const pendingInputs = this.pendingExecInputs.get(socket) ?? [];
+    pendingInputs.push(parsed.payload.data);
+    this.pendingExecInputs.set(socket, pendingInputs);
   }
 
   closeExec(socket: object) {
@@ -221,6 +234,7 @@ export class DockerController implements IDockerController {
     }
 
     this.execSessions.delete(socket);
+    this.pendingExecInputs.delete(socket);
   }
 }
 
