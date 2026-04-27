@@ -143,7 +143,6 @@ class DockerCliIntegration implements DockerIntegration {
         stdout: "pipe",
       },
     );
-    const encoder = new TextEncoder();
     let isClosed = false;
 
     void readChunks(process.stdout, "stdout", onOutput);
@@ -169,7 +168,7 @@ class DockerCliIntegration implements DockerIntegration {
         }
 
         try {
-          process.stdin.write(encoder.encode(data));
+          process.stdin.write(data);
           process.stdin.flush();
         } catch (error) {
           onOutput({
