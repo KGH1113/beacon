@@ -22,7 +22,10 @@ export const mockShares = [
     preview: {
       kind: "image",
       extension: "PNG",
+      status: "ready",
       thumbnailUrl: svgPreviewDataUri("server-screenshot", "image preview"),
+      streamUrl: null,
+      textPreviewUrl: null,
       title: "Server screenshot",
     },
     expiresAt: "2026-05-01T09:00:00.000Z",
@@ -40,7 +43,10 @@ export const mockShares = [
     preview: {
       kind: "video",
       extension: "MP4",
+      status: "ready",
       thumbnailUrl: svgPreviewDataUri("world-tour", "video thumbnail"),
+      streamUrl: "/stream/share_7f2k_tour",
+      textPreviewUrl: null,
       title: "World tour clip",
     },
     expiresAt: "2026-04-27T12:00:00.000Z",
@@ -58,7 +64,10 @@ export const mockShares = [
     preview: {
       kind: "document",
       extension: "PDF",
-      thumbnailUrl: svgPreviewDataUri("BEACON", "runbook document"),
+      status: "unavailable",
+      thumbnailUrl: null,
+      streamUrl: null,
+      textPreviewUrl: null,
       title: "Beacon runbook",
     },
     expiresAt: null,
@@ -76,7 +85,10 @@ export const mockShares = [
     preview: {
       kind: "file",
       extension: "ZIP",
+      status: "unavailable",
       thumbnailUrl: null,
+      streamUrl: null,
+      textPreviewUrl: null,
       title: "World backup archive",
     },
     expiresAt: "2026-04-22T18:00:00.000Z",
@@ -105,6 +117,23 @@ export function getShareHref(share: ShareDto) {
 
 export function getShareDownloadUrl(share: ShareDto, baseUrl: string) {
   return new URL(getShareHref(share), baseUrl).toString();
+}
+
+export function getShareAssetUrl(url: string | null, baseUrl: string) {
+  if (!url) {
+    return null;
+  }
+
+  if (
+    url.startsWith("data:") ||
+    url.startsWith("blob:") ||
+    url.startsWith("http://") ||
+    url.startsWith("https://")
+  ) {
+    return url;
+  }
+
+  return new URL(url, baseUrl).toString();
 }
 
 export function isShareExpiringSoon(share: ShareDto) {

@@ -19,6 +19,15 @@ export const sharePublicRoute = new Elysia({
   name: "share.public.route",
 })
   .onError(({ error, set }) => handleShareError(error, set))
+  .get("/preview/:token/text", ({ params }) =>
+    shareController.previewText(params.token),
+  )
+  .get("/preview/:token/thumbnail", ({ params }) =>
+    shareController.previewThumbnail(params.token),
+  )
+  .get("/stream/:token", ({ params }) =>
+    shareController.previewStream(params.token),
+  )
   .get("/s/:token", ({ params }) => shareController.download(params.token));
 
 function handleShareError(error: unknown, set: { status?: number | string }) {

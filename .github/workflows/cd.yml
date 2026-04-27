@@ -72,6 +72,18 @@ jobs:
             exit 1
           }
 
+          command -v ffmpeg >/dev/null || {
+            echo "Missing required command: ffmpeg"
+            echo "Install ffmpeg on the home server before deploying share previews."
+            exit 1
+          }
+
+          command -v ffprobe >/dev/null || {
+            echo "Missing required command: ffprobe"
+            echo "Install ffmpeg on the home server before deploying share previews."
+            exit 1
+          }
+
           test -d "$DEPLOY_DIR" || {
             echo "Missing deploy directory: $DEPLOY_DIR"
             exit 1

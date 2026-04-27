@@ -5,16 +5,23 @@ import { IdSchema, IsoDatetimeStringSchema } from "../common/entity";
 export const ShareStatusSchema = z.enum(["active", "revoked"]);
 
 export const SharePreviewKindSchema = z.enum([
+  "audio",
   "image",
+  "text",
   "video",
   "document",
   "file",
 ]);
 
+export const SharePreviewStatusSchema = z.enum(["ready", "unavailable"]);
+
 export const SharePreviewDtoSchema = z.object({
   kind: SharePreviewKindSchema,
+  status: SharePreviewStatusSchema,
   extension: z.string(),
   thumbnailUrl: z.string().nullable(),
+  streamUrl: z.string().nullable(),
+  textPreviewUrl: z.string().nullable(),
   title: z.string(),
 });
 
@@ -57,6 +64,7 @@ export const RevokeShareInputSchema = z.object({
 export type ShareDto = z.infer<typeof ShareDtoSchema>;
 export type SharePreviewDto = z.infer<typeof SharePreviewDtoSchema>;
 export type SharePreviewKind = z.infer<typeof SharePreviewKindSchema>;
+export type SharePreviewStatus = z.infer<typeof SharePreviewStatusSchema>;
 export type ShareStatus = z.infer<typeof ShareStatusSchema>;
 export type ListSharesOutput = z.infer<typeof ListSharesOutputSchema>;
 export type UploadShareMetadata = z.infer<typeof UploadShareMetadataSchema>;

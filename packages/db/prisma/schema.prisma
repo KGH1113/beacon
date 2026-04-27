@@ -13,6 +13,11 @@ model Share {
   filePath      String
   fileName      String
   sizeBytes     BigInt?
+  previewKind   String?
+  previewStatus String    @default("unavailable")
+  thumbnailPath String?
+  streamPath    String?
+  textPreviewPath String?
   downloadCount Int       @default(0)
   revokedAt     DateTime?
   expiresAt     DateTime?

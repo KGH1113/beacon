@@ -12,6 +12,9 @@ export interface IShareController {
   upload: (input: unknown) => Promise<UploadShareOutput>;
   revoke: (shareId: string) => Promise<ShareDto>;
   download: (token: string) => Promise<Response>;
+  previewStream: (token: string) => Promise<Response>;
+  previewText: (token: string) => Promise<Response>;
+  previewThumbnail: (token: string) => Promise<Response>;
 }
 
 export class ShareController implements IShareController {
@@ -44,6 +47,39 @@ export class ShareController implements IShareController {
       },
     });
   }
+
+  async previewStream(token: string): Promise<Response> {
+    const file = await this.service.getPreviewAsset(token, "stream");
+
+    return createInlineFileResponse(file);
+  }
+
+  async previewText(token: string): Promise<Response> {
+    const file = await this.service.getPreviewAsset(token, "text");
+
+    return createInlineFileResponse(file);
+  }
+
+  async previewThumbnail(token: string): Promise<Response> {
+    const file = await this.service.getPreviewAsset(token, "thumbnail");
+
+    return createInlineFileResponse(file);
+  }
+}
+
+function createInlineFileResponse(file: {
+  body: Blob;
+  fileName: string;
+  mimeType: string;
+  sizeBytes: bigint;
+}) {
+  return new Response(file.body, {
+    headers: {
+      "Content-Disposition": createInlineDisposition(file.fileName),
+      "Content-Length": file.sizeBytes.toString(),
+      "Content-Type": file.mimeType,
+    },
+  });
 }
 
 function createAttachmentDisposition(fileName: string) {
@@ -51,4 +87,11 @@ function createAttachmentDisposition(fileName: string) {
   const encodedName = encodeURIComponent(fileName);
 
   return `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`;
+}
+
+function createInlineDisposition(fileName: string) {
+  const fallbackName = fileName.replace(/[^\w.-]/g, "_");
+  const encodedName = encodeURIComponent(fileName);
+
+  return `inline; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`;
 }

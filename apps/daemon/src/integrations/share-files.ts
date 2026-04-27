@@ -27,6 +27,7 @@ export type StoredUploadedShareFile = ResolvedShareFile & {
 };
 
 export interface ShareFileIntegration {
+  createPreviewDirectory: (shareId: string) => Promise<string>;
   resolveFile: (filePath: string) => Promise<ResolvedShareFile>;
   readFileBody: (filePath: string) => Promise<Blob>;
   storeUploadedFile: (file: File) => Promise<StoredUploadedShareFile>;
@@ -34,6 +35,27 @@ export interface ShareFileIntegration {
 
 export class LocalShareFileIntegration implements ShareFileIntegration {
   private readonly roots = loadShareRoots();
+
+  async createPreviewDirectory(shareId: string): Promise<string> {
+    const previewDir = resolve(
+      this.roots[0].path,
+      ".beacon",
+      "previews",
+      shareId,
+    );
+
+    if (!this.isInsideShareRoot(previewDir)) {
+      throw new AppError(
+        ErrorCode.Forbidden,
+        "Preview destination is outside configured share roots.",
+        403,
+      );
+    }
+
+    await mkdir(previewDir, { recursive: true });
+
+    return previewDir;
+  }
 
   async resolveFile(filePath: string): Promise<ResolvedShareFile> {
     const absolutePath = resolve(filePath);
@@ -162,12 +184,20 @@ function getMimeType(filePath: string) {
   const extension = extname(filePath).toLowerCase();
   const mimeTypes: Record<string, string> = {
     ".avif": "image/avif",
+    ".flac": "audio/flac",
     ".gif": "image/gif",
     ".jpeg": "image/jpeg",
     ".jpg": "image/jpeg",
+    ".m4a": "audio/mp4",
+    ".mov": "video/quicktime",
+    ".mp3": "audio/mpeg",
+    ".mp4": "video/mp4",
+    ".ogg": "audio/ogg",
     ".pdf": "application/pdf",
     ".png": "image/png",
     ".txt": "text/plain; charset=utf-8",
+    ".wav": "audio/wav",
+    ".webm": "video/webm",
     ".webp": "image/webp",
   };
 

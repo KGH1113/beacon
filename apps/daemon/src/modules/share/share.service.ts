@@ -1,4 +1,8 @@
-import { type ShareRepository, createShareRepository } from "@beacon/db";
+import {
+  type ShareFileRecord,
+  type ShareRepository,
+  createShareRepository,
+} from "@beacon/db";
 import {
   type CreateShareInput,
   CreateShareInputSchema,
@@ -17,6 +21,10 @@ import {
   type ShareFileIntegration,
   createShareFileIntegration,
 } from "../../integrations/share-files";
+import {
+  type SharePreviewIntegration,
+  createSharePreviewIntegration,
+} from "../../integrations/share-previews";
 import { AppError } from "../../shared/errors/app-error";
 import { ErrorCode } from "../../shared/errors/error-code";
 
@@ -27,18 +35,27 @@ export type ShareDownload = {
   sizeBytes: bigint;
 };
 
+export type SharePreviewAssetType = "stream" | "text" | "thumbnail";
+
 export interface IShareService {
   listShares: () => Promise<ListSharesOutput>;
   createShare: (input: unknown) => Promise<ShareDto>;
   uploadShare: (input: unknown) => Promise<UploadShareOutput>;
   revokeShare: (input: unknown) => Promise<ShareDto>;
   getDownload: (token: string) => Promise<ShareDownload>;
+  getPreviewAsset: (
+    token: string,
+    type: SharePreviewAssetType,
+  ) => Promise<ShareDownload>;
 }
 
 export class ShareService implements IShareService {
   constructor(
     private readonly repository: ShareRepository = createShareRepository(),
     private readonly files: ShareFileIntegration = createShareFileIntegration(),
+    private readonly previews: SharePreviewIntegration = createSharePreviewIntegration(
+      files,
+    ),
   ) {}
 
   async listShares(): Promise<ListSharesOutput> {
@@ -57,8 +74,12 @@ export class ShareService implements IShareService {
       fileName: parsed.fileName || file.fileName,
       sizeBytes: file.sizeBytes,
     });
+    const updatedShare = await this.generateAndPersistPreview(
+      share,
+      file.absolutePath,
+    );
 
-    return ShareDtoSchema.parse(share);
+    return ShareDtoSchema.parse(updatedShare);
   }
 
   async uploadShare(input: unknown): Promise<UploadShareOutput> {
@@ -73,8 +94,12 @@ export class ShareService implements IShareService {
       filePath: file.absolutePath,
       sizeBytes: file.sizeBytes,
     });
+    const updatedShare = await this.generateAndPersistPreview(
+      share,
+      file.absolutePath,
+    );
 
-    return UploadShareOutputSchema.parse({ share });
+    return UploadShareOutputSchema.parse({ share: updatedShare });
   }
 
   async revokeShare(input: unknown): Promise<ShareDto> {
@@ -91,16 +116,7 @@ export class ShareService implements IShareService {
   }
 
   async getDownload(token: string): Promise<ShareDownload> {
-    const share = await this.repository.findActiveByToken(token);
-
-    if (!share) {
-      throw new AppError(ErrorCode.NotFound, "Share was not found.", 404);
-    }
-
-    if (share.expiresAt && new Date(share.expiresAt).getTime() < Date.now()) {
-      throw new AppError(ErrorCode.Gone, "Share has expired.", 410);
-    }
-
+    const share = await this.getActiveShareRecord(token);
     const file = await this.files.resolveFile(share.filePath);
     await this.repository.incrementDownloadCount(share.id);
 
@@ -111,6 +127,67 @@ export class ShareService implements IShareService {
       sizeBytes: file.sizeBytes,
     };
   }
+
+  async getPreviewAsset(
+    token: string,
+    type: SharePreviewAssetType,
+  ): Promise<ShareDownload> {
+    const share = await this.getActiveShareRecord(token);
+    const filePath = getPreviewPath(share, type);
+
+    if (!filePath) {
+      throw new AppError(ErrorCode.NotFound, "Preview was not found.", 404);
+    }
+
+    const file = await this.files.resolveFile(filePath);
+
+    return {
+      body: await this.files.readFileBody(filePath),
+      fileName: file.fileName,
+      mimeType: file.mimeType,
+      sizeBytes: file.sizeBytes,
+    };
+  }
+
+  private async generateAndPersistPreview(
+    share: ShareDto,
+    filePath: string,
+  ): Promise<ShareDto> {
+    const preview = await this.previews.generatePreview({
+      fileName: share.fileName,
+      filePath,
+      shareId: share.id,
+    });
+    const updatedShare = await this.repository.updatePreview(share.id, preview);
+
+    return updatedShare ?? share;
+  }
+
+  private async getActiveShareRecord(token: string): Promise<ShareFileRecord> {
+    const share = await this.repository.findActiveRecordByToken(token);
+
+    if (!share) {
+      throw new AppError(ErrorCode.NotFound, "Share was not found.", 404);
+    }
+
+    if (share.expiresAt && share.expiresAt.getTime() < Date.now()) {
+      throw new AppError(ErrorCode.Gone, "Share has expired.", 410);
+    }
+
+    return share;
+  }
+}
+
+function getPreviewPath(share: ShareFileRecord, type: SharePreviewAssetType) {
+  if (type === "stream") {
+    return share.streamPath;
+  }
+
+  if (type === "text") {
+    return share.textPreviewPath;
+  }
+
+  return share.thumbnailPath;
 }
 
 function parseUploadBody(input: unknown) {

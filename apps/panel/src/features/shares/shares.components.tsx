@@ -5,8 +5,11 @@ import {
   FileIcon,
   FileTextIcon,
   ImageIcon,
+  MusicNotesIcon,
+  PlayIcon,
   VideoIcon,
 } from "@phosphor-icons/react/ssr";
+import type React from "react";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
@@ -50,6 +53,7 @@ import {
   filterShares,
   formatShareCreatedAt,
   formatShareExpiry,
+  getShareAssetUrl,
   getShareDownloadUrl,
   getShareHref,
   getShareStatusClassName,
@@ -67,7 +71,9 @@ const shareFilters = [
 ] satisfies Array<{ value: ShareFilter; label: string }>;
 
 const previewIconByKind = {
+  audio: MusicNotesIcon,
   image: ImageIcon,
+  text: FileTextIcon,
   video: VideoIcon,
   document: FileTextIcon,
   file: FileIcon,
@@ -421,7 +427,7 @@ function ShareDetailCard({
         </div>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
-        <FilePreview share={share} />
+        <FilePreview daemonPublicBaseUrl={daemonPublicBaseUrl} share={share} />
 
         <div className="grid gap-3 sm:grid-cols-2">
           <DetailMetric label="Size" value={share.sizeLabel} />
@@ -473,10 +479,59 @@ function ShareDetailCard({
   );
 }
 
-function FilePreview({ share }: { share: ShareDto }) {
+function FilePreview({
+  daemonPublicBaseUrl,
+  share,
+}: {
+  daemonPublicBaseUrl: string;
+  share: ShareDto;
+}) {
   const PreviewIcon = previewIconByKind[share.preview.kind];
+  const streamUrl = getShareAssetUrl(
+    share.preview.streamUrl,
+    daemonPublicBaseUrl,
+  );
+  const textPreviewUrl = getShareAssetUrl(
+    share.preview.textPreviewUrl,
+    daemonPublicBaseUrl,
+  );
+  const thumbnailUrl = getShareAssetUrl(
+    share.preview.thumbnailUrl,
+    daemonPublicBaseUrl,
+  );
 
-  if (share.preview.thumbnailUrl) {
+  if (share.preview.kind === "video" && streamUrl) {
+    return (
+      <VideoPreview
+        extension={share.preview.extension}
+        streamUrl={streamUrl}
+        thumbnailUrl={thumbnailUrl}
+        title={share.preview.title}
+      />
+    );
+  }
+
+  if (share.preview.kind === "audio" && streamUrl) {
+    return (
+      <AudioPreview
+        extension={share.preview.extension}
+        streamUrl={streamUrl}
+        title={share.preview.title}
+      />
+    );
+  }
+
+  if (share.preview.kind === "text" && textPreviewUrl) {
+    return (
+      <TextPreview
+        extension={share.preview.extension}
+        textPreviewUrl={textPreviewUrl}
+        title={share.preview.title}
+      />
+    );
+  }
+
+  if (thumbnailUrl) {
     return (
       <Card className="aspect-square overflow-hidden border">
         <CardContent className="flex h-full flex-col gap-3 p-3">
@@ -484,7 +539,7 @@ function FilePreview({ share }: { share: ShareDto }) {
             <img
               alt={`${share.preview.title} preview`}
               className="size-full object-contain"
-              src={share.preview.thumbnailUrl}
+              src={thumbnailUrl}
             />
           </div>
           <div className="flex shrink-0 items-center justify-between gap-3">
@@ -516,6 +571,182 @@ function FilePreview({ share }: { share: ShareDto }) {
         <Badge variant="outline">{share.preview.extension}</Badge>
       </CardContent>
     </Card>
+  );
+}
+
+function VideoPreview({
+  extension,
+  streamUrl,
+  thumbnailUrl,
+  title,
+}: {
+  extension: string;
+  streamUrl: string;
+  thumbnailUrl: string | null;
+  title: string;
+}) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  return (
+    <Card className="aspect-square overflow-hidden border">
+      <CardContent className="flex h-full flex-col gap-3 p-3">
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-none bg-muted">
+          {isPlaying ? (
+            // biome-ignore lint/a11y/useMediaCaption: Preview derivatives do not have captions in v1.
+            <video
+              className="size-full object-contain"
+              controls
+              playsInline
+              src={streamUrl}
+            />
+          ) : thumbnailUrl ? (
+            <img
+              alt={`${title} thumbnail`}
+              className="size-full object-contain"
+              src={thumbnailUrl}
+            />
+          ) : (
+            <div className="flex size-full items-center justify-center">
+              <VideoIcon />
+            </div>
+          )}
+          {isPlaying ? null : (
+            <Button
+              className="-translate-x-1/2 -translate-y-1/2 absolute top-1/2 left-1/2"
+              onClick={() => setIsPlaying(true)}
+              type="button"
+              variant="secondary"
+            >
+              <PlayIcon data-icon="inline-start" />
+              Play preview
+            </Button>
+          )}
+        </div>
+        <PreviewFooter
+          extension={extension}
+          icon={<VideoIcon />}
+          title={title}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function AudioPreview({
+  extension,
+  streamUrl,
+  title,
+}: {
+  extension: string;
+  streamUrl: string;
+  title: string;
+}) {
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  return (
+    <Card className="aspect-square overflow-hidden border">
+      <CardContent className="flex h-full flex-col gap-4 p-6">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 text-center">
+          <div className="flex size-16 items-center justify-center rounded-none bg-muted">
+            <MusicNotesIcon />
+          </div>
+          <div className="flex max-w-full flex-col gap-1">
+            <CardTitle className="truncate">{title}</CardTitle>
+            <CardDescription className="truncate">
+              Low-bitrate audio preview is ready.
+            </CardDescription>
+          </div>
+          {isPlaying ? (
+            // biome-ignore lint/a11y/useMediaCaption: Preview derivatives do not have captions in v1.
+            <audio className="w-full" controls src={streamUrl} />
+          ) : (
+            <Button onClick={() => setIsPlaying(true)} type="button">
+              <PlayIcon data-icon="inline-start" />
+              Play audio
+            </Button>
+          )}
+        </div>
+        <PreviewFooter
+          extension={extension}
+          icon={<MusicNotesIcon />}
+          title={title}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function TextPreview({
+  extension,
+  textPreviewUrl,
+  title,
+}: {
+  extension: string;
+  textPreviewUrl: string;
+  title: string;
+}) {
+  const [textPreview, setTextPreview] = useState("Loading text preview...");
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    fetch(textPreviewUrl)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Text preview request failed.");
+        }
+
+        return response.text();
+      })
+      .then((text) => {
+        if (isCurrent) {
+          setTextPreview(text || "No previewable text content.");
+        }
+      })
+      .catch(() => {
+        if (isCurrent) {
+          setTextPreview("Text preview is unavailable.");
+        }
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [textPreviewUrl]);
+
+  return (
+    <Card className="aspect-square overflow-hidden border">
+      <CardContent className="flex h-full flex-col gap-3 p-3">
+        <pre className="min-h-0 flex-1 overflow-auto rounded-none bg-muted p-4 text-left text-sm">
+          {textPreview}
+        </pre>
+        <PreviewFooter
+          extension={extension}
+          icon={<FileTextIcon />}
+          title={title}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function PreviewFooter({
+  extension,
+  icon,
+  title,
+}: {
+  extension: string;
+  icon: React.ReactNode;
+  title: string;
+}) {
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        {icon}
+        <p className="min-w-0 truncate font-medium text-sm">{title}</p>
+      </div>
+      <Badge variant="outline">{extension}</Badge>
+    </div>
   );
 }
 

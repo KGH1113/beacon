@@ -5,6 +5,7 @@ import type {
   CreateShareInput,
   ShareDto,
   SharePreviewKind,
+  SharePreviewStatus,
 } from "@beacon/shared";
 
 import { getPrismaClient } from "../client/prisma-client";
@@ -15,6 +16,11 @@ type PersistedShare = {
   filePath: string;
   fileName: string;
   sizeBytes: bigint | null;
+  previewKind: string | null;
+  previewStatus: string;
+  thumbnailPath: string | null;
+  streamPath: string | null;
+  textPreviewPath: string | null;
   downloadCount: number;
   revokedAt: Date | null;
   expiresAt: Date | null;
@@ -26,16 +32,33 @@ export type CreateShareRecordInput = CreateShareInput & {
   sizeBytes?: bigint | null;
 };
 
+export type SharePreviewRecordInput = {
+  kind: SharePreviewKind;
+  status: SharePreviewStatus;
+  streamPath?: string | null;
+  textPreviewPath?: string | null;
+  thumbnailPath?: string | null;
+};
+
+export type ShareFileRecord = PersistedShare;
+
 export interface ShareRepository {
   list: () => Promise<ShareDto[]>;
   create: (input: CreateShareRecordInput) => Promise<ShareDto>;
   revoke: (shareId: string) => Promise<ShareDto | null>;
   findActiveByToken: (token: string) => Promise<ShareDto | null>;
+  findActiveRecordByToken: (token: string) => Promise<ShareFileRecord | null>;
   incrementDownloadCount: (shareId: string) => Promise<ShareDto | null>;
+  updatePreview: (
+    shareId: string,
+    input: SharePreviewRecordInput,
+  ) => Promise<ShareDto | null>;
 }
 
 function toShareDto(share: PersistedShare): ShareDto {
   const extension = getFileExtension(share.fileName);
+  const previewKind = parsePreviewKind(share.previewKind, extension);
+  const previewStatus = parsePreviewStatus(share.previewStatus);
 
   return {
     id: share.id,
@@ -46,9 +69,16 @@ function toShareDto(share: PersistedShare): ShareDto {
     downloadCount: share.downloadCount,
     status: share.revokedAt ? "revoked" : "active",
     preview: {
-      kind: getPreviewKind(extension),
+      kind: previewKind,
+      status: previewStatus,
       extension,
-      thumbnailUrl: null,
+      thumbnailUrl: share.thumbnailPath
+        ? `/preview/${share.token}/thumbnail`
+        : null,
+      streamUrl: share.streamPath ? `/stream/${share.token}` : null,
+      textPreviewUrl: share.textPreviewPath
+        ? `/preview/${share.token}/text`
+        : null,
       title: getPreviewTitle(share.fileName),
     },
     expiresAt: share.expiresAt?.toISOString() ?? null,
@@ -116,6 +146,14 @@ export class PrismaShareRepository implements ShareRepository {
   }
 
   async findActiveByToken(token: string): Promise<ShareDto | null> {
+    const share = await this.findActiveRecordByToken(token);
+
+    return share ? toShareDto(share) : null;
+  }
+
+  async findActiveRecordByToken(
+    token: string,
+  ): Promise<ShareFileRecord | null> {
     const share = await this.prisma.share.findUnique({
       where: {
         token,
@@ -126,7 +164,7 @@ export class PrismaShareRepository implements ShareRepository {
       return null;
     }
 
-    return toShareDto(share);
+    return share;
   }
 
   async incrementDownloadCount(shareId: string): Promise<ShareDto | null> {
@@ -139,6 +177,34 @@ export class PrismaShareRepository implements ShareRepository {
           downloadCount: {
             increment: 1,
           },
+        },
+      });
+
+      return toShareDto(share);
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  async updatePreview(
+    shareId: string,
+    input: SharePreviewRecordInput,
+  ): Promise<ShareDto | null> {
+    try {
+      const share = await this.prisma.share.update({
+        where: {
+          id: shareId,
+        },
+        data: {
+          previewKind: input.kind,
+          previewStatus: input.status,
+          streamPath: input.streamPath ?? null,
+          textPreviewPath: input.textPreviewPath ?? null,
+          thumbnailPath: input.thumbnailPath ?? null,
         },
       });
 
@@ -186,8 +252,16 @@ function getPreviewTitle(fileName: string) {
 function getPreviewKind(extension: string): SharePreviewKind {
   const normalized = extension.toLowerCase();
 
+  if (["aac", "flac", "m4a", "mp3", "ogg", "wav"].includes(normalized)) {
+    return "audio";
+  }
+
   if (["avif", "gif", "jpeg", "jpg", "png", "webp"].includes(normalized)) {
     return "image";
+  }
+
+  if (["log", "md", "txt"].includes(normalized)) {
+    return "text";
   }
 
   if (["m4v", "mkv", "mov", "mp4", "webm"].includes(normalized)) {
@@ -199,6 +273,28 @@ function getPreviewKind(extension: string): SharePreviewKind {
   }
 
   return "file";
+}
+
+function parsePreviewKind(
+  value: string | null,
+  fallbackExtension: string,
+): SharePreviewKind {
+  if (
+    value === "audio" ||
+    value === "document" ||
+    value === "file" ||
+    value === "image" ||
+    value === "text" ||
+    value === "video"
+  ) {
+    return value;
+  }
+
+  return getPreviewKind(fallbackExtension);
+}
+
+function parsePreviewStatus(value: string): SharePreviewStatus {
+  return value === "ready" ? "ready" : "unavailable";
 }
 
 function formatFileSize(sizeBytes: bigint | null) {
