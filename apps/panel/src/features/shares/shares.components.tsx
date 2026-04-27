@@ -424,7 +424,7 @@ function ShareDetailCard({
     const shareUrl = getShareDownloadUrl(selectedShare, daemonPublicBaseUrl);
 
     try {
-      await navigator.clipboard.writeText(shareUrl);
+      await copyTextToClipboard(shareUrl);
       toast.success("Link copied", {
         description: shareUrl,
       });
@@ -563,6 +563,34 @@ function ShareDetailCard({
       </CardContent>
     </Card>
   );
+}
+
+async function copyTextToClipboard(text: string) {
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement("textarea");
+  textArea.value = text;
+  textArea.setAttribute("readonly", "");
+  textArea.style.left = "-9999px";
+  textArea.style.position = "fixed";
+  textArea.style.top = "0";
+
+  document.body.appendChild(textArea);
+  textArea.focus();
+  textArea.select();
+
+  try {
+    const didCopy = document.execCommand("copy");
+
+    if (!didCopy) {
+      throw new Error("Copy command failed.");
+    }
+  } finally {
+    document.body.removeChild(textArea);
+  }
 }
 
 function FilePreview({
