@@ -191,7 +191,7 @@ export class DockerController implements IDockerController {
         (event) => send(JSON.stringify(event)),
         (event) => {
           send(JSON.stringify(event));
-          socket.close();
+          setTimeout(() => socket.close(), 100);
         },
       )
       .then((session) => {
@@ -215,7 +215,7 @@ export class DockerController implements IDockerController {
             },
           }),
         );
-        socket.close();
+        setTimeout(() => socket.close(), 100);
       });
   }
 

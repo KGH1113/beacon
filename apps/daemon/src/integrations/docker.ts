@@ -156,9 +156,10 @@ class DockerCliIntegration implements DockerIntegration {
       Tty: true,
     });
     const stream = await exec.start({
+      Detach: false,
+      Tty: true,
       hijack: true,
       stdin: true,
-      Tty: true,
     });
     let isClosed = false;
     let didNotifyClose = false;
