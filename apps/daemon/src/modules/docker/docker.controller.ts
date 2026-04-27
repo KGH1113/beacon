@@ -225,7 +225,15 @@ export class DockerController implements IDockerController {
 }
 
 function parseSocketInput(input: unknown): DockerExecInputDto {
-  const payload = typeof input === "string" ? JSON.parse(input) : input;
+  let payload = input;
+
+  if (typeof input === "string") {
+    payload = JSON.parse(input);
+  } else if (input instanceof Uint8Array) {
+    payload = JSON.parse(new TextDecoder().decode(input));
+  } else if (input instanceof ArrayBuffer) {
+    payload = JSON.parse(new TextDecoder().decode(input));
+  }
 
   return DockerExecInputDtoSchema.parse(payload);
 }
