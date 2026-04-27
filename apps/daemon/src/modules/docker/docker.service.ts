@@ -131,6 +131,17 @@ export class DockerService implements IDockerService {
       );
     }
 
+    onOutput(
+      DockerExecOutputDtoSchema.parse({
+        type: "docker.exec.output",
+        timestamp: new Date().toISOString(),
+        payload: {
+          data: `Container resolved. Starting ${container.defaultShell} TTY...\r\n`,
+          stream: "system",
+        },
+      }),
+    );
+
     return this.integration.createExecSession(
       container.id,
       container.defaultShell,

@@ -147,6 +147,10 @@ class DockerCliIntegration implements DockerIntegration {
     onClose: (code: number | null) => void,
   ): Promise<DockerExecSession> {
     const engine = await this.getEngine();
+    onOutput({
+      line: "Docker Engine client ready.\r\n",
+      stream: "stdout",
+    });
     const exec = await engine.getContainer(containerId).exec({
       AttachStderr: true,
       AttachStdin: true,
@@ -155,11 +159,19 @@ class DockerCliIntegration implements DockerIntegration {
       Env: ["TERM=xterm-256color"],
       Tty: true,
     });
+    onOutput({
+      line: "Docker exec object created.\r\n",
+      stream: "stdout",
+    });
     const stream = await exec.start({
       Detach: false,
       Tty: true,
       hijack: true,
       stdin: true,
+    });
+    onOutput({
+      line: "Docker TTY stream attached.\r\n",
+      stream: "stdout",
     });
     let isClosed = false;
     let didNotifyClose = false;
