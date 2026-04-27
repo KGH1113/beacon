@@ -22,6 +22,8 @@ export const internalApp = new Elysia()
       .use(shareRoute),
   );
 
-export const publicShareApp = new Elysia().use(sharePublicRoute);
+export const publicShareApp = new Elysia()
+  .use(corsPlugin)
+  .use(sharePublicRoute);
 
 export const app = internalApp;
