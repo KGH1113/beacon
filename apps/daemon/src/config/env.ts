@@ -6,6 +6,8 @@ export const daemonEnvSchema = z.object({
     .default("development"),
   BEACON_DAEMON_HOST: z.string().default("0.0.0.0"),
   BEACON_DAEMON_PORT: z.coerce.number().int().positive().default(7300),
+  BEACON_SHARE_HOST: z.string().default("127.0.0.1"),
+  BEACON_SHARE_PORT: z.coerce.number().int().positive().default(7301),
   BEACON_SHARE_ROOTS_CONFIG: z.string().optional(),
 });
 

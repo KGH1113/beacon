@@ -9,10 +9,9 @@ import { authPlugin } from "./plugins/auth.plugin";
 import { corsPlugin } from "./plugins/cors.plugin";
 import { swaggerPlugin } from "./plugins/swagger.plugin";
 
-export const app = new Elysia()
+export const internalApp = new Elysia()
   .use(corsPlugin)
   .use(healthRoute)
-  .use(sharePublicRoute)
   .group("/api/v1", (api) =>
     api
       .use(swaggerPlugin)
@@ -22,3 +21,7 @@ export const app = new Elysia()
       .use(systemRoute)
       .use(shareRoute),
   );
+
+export const publicShareApp = new Elysia().use(sharePublicRoute);
+
+export const app = internalApp;
