@@ -405,10 +405,10 @@ function ShareDetailCard({
   return (
     <Card className="flex min-h-0 flex-col">
       <CardHeader>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+          <div className="min-w-0">
             <CardTitle className="truncate">{share.fileName}</CardTitle>
-            <CardDescription className="break-all text-xs leading-relaxed">
+            <CardDescription className="truncate text-xs">
               {share.filePath}
             </CardDescription>
           </div>
@@ -490,7 +490,7 @@ function FilePreview({ share }: { share: ShareDto }) {
           <div className="flex shrink-0 items-center justify-between gap-3">
             <div className="flex min-w-0 items-center gap-2">
               <PreviewIcon />
-              <p className="truncate font-medium text-sm">
+              <p className="min-w-0 truncate font-medium text-sm">
                 {share.preview.title}
               </p>
             </div>
@@ -503,13 +503,13 @@ function FilePreview({ share }: { share: ShareDto }) {
 
   return (
     <Card className="aspect-square overflow-hidden border">
-      <CardContent className="flex h-full flex-col items-center justify-center gap-4 border-t p-6 text-center">
+      <CardContent className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
         <div className="flex size-16 items-center justify-center rounded-none bg-muted">
           <PreviewIcon />
         </div>
-        <div className="flex flex-col gap-1">
-          <CardTitle>{share.preview.title}</CardTitle>
-          <CardDescription>
+        <div className="flex max-w-full flex-col gap-1">
+          <CardTitle className="truncate">{share.preview.title}</CardTitle>
+          <CardDescription className="truncate">
             Preview is not available for {share.preview.extension} files.
           </CardDescription>
         </div>
