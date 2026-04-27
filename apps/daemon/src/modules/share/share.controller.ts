@@ -5,7 +5,11 @@ import type {
   UploadShareOutput,
 } from "@beacon/shared";
 
-import { type IShareService, ShareService } from "./share.service";
+import {
+  type IShareService,
+  type ShareFileAsset,
+  ShareService,
+} from "./share.service";
 
 export interface IShareController {
   deleteFile: (shareId: string) => Promise<DeleteShareFileOutput>;
@@ -14,7 +18,10 @@ export interface IShareController {
   upload: (input: unknown) => Promise<UploadShareOutput>;
   revoke: (shareId: string) => Promise<ShareDto>;
   download: (token: string) => Promise<Response>;
-  previewStream: (token: string) => Promise<Response>;
+  previewStream: (
+    token: string,
+    rangeHeader: string | null,
+  ) => Promise<Response>;
   previewText: (token: string) => Promise<Response>;
   previewThumbnail: (token: string) => Promise<Response>;
 }
@@ -54,10 +61,13 @@ export class ShareController implements IShareController {
     });
   }
 
-  async previewStream(token: string): Promise<Response> {
-    const file = await this.service.getPreviewAsset(token, "stream");
+  async previewStream(
+    token: string,
+    rangeHeader: string | null,
+  ): Promise<Response> {
+    const file = await this.service.getPreviewStreamAsset(token);
 
-    return createInlineFileResponse(file);
+    return createStreamingFileResponse(file, rangeHeader);
   }
 
   async previewText(token: string): Promise<Response> {
@@ -86,6 +96,130 @@ function createInlineFileResponse(file: {
       "Content-Type": file.mimeType,
     },
   });
+}
+
+function createStreamingFileResponse(
+  file: ShareFileAsset,
+  rangeHeader: string | null,
+) {
+  const fileSize = Number(file.sizeBytes);
+  const baseHeaders = {
+    "Accept-Ranges": "bytes",
+    "Content-Disposition": createInlineDisposition(file.fileName),
+    "Content-Type": file.mimeType,
+  };
+
+  if (!Number.isSafeInteger(fileSize)) {
+    return createUnsatisfiableRangeResponse(file.sizeBytes.toString());
+  }
+
+  const range = parseByteRange(rangeHeader, fileSize);
+
+  if (range === "invalid") {
+    return createUnsatisfiableRangeResponse(file.sizeBytes.toString());
+  }
+
+  const source = Bun.file(file.absolutePath);
+
+  if (!range) {
+    return new Response(source, {
+      headers: {
+        ...baseHeaders,
+        "Content-Length": file.sizeBytes.toString(),
+      },
+    });
+  }
+
+  return new Response(source.slice(range.start, range.end + 1), {
+    headers: {
+      ...baseHeaders,
+      "Content-Length": String(range.end - range.start + 1),
+      "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+    },
+    status: 206,
+  });
+}
+
+function createUnsatisfiableRangeResponse(sizeLabel: string) {
+  return new Response(null, {
+    headers: {
+      "Accept-Ranges": "bytes",
+      "Content-Range": `bytes */${sizeLabel}`,
+    },
+    status: 416,
+  });
+}
+
+function parseByteRange(
+  rangeHeader: string | null,
+  fileSize: number,
+): { end: number; start: number } | "invalid" | null {
+  if (!rangeHeader) {
+    return null;
+  }
+
+  const match = /^bytes=([^,]+)$/.exec(rangeHeader.trim());
+
+  if (!match) {
+    return "invalid";
+  }
+
+  const rangeParts = match[1].split("-");
+
+  if (rangeParts.length !== 2) {
+    return "invalid";
+  }
+
+  const [startText, endText] = rangeParts;
+
+  if (typeof endText === "undefined" || (!startText && !endText)) {
+    return "invalid";
+  }
+
+  if (fileSize === 0) {
+    return "invalid";
+  }
+
+  if (!startText) {
+    const suffixLength = parsePositiveInteger(endText);
+
+    if (!suffixLength) {
+      return "invalid";
+    }
+
+    return {
+      end: fileSize - 1,
+      start: Math.max(fileSize - suffixLength, 0),
+    };
+  }
+
+  const start = parseNonNegativeInteger(startText);
+  const end = endText ? parseNonNegativeInteger(endText) : fileSize - 1;
+
+  if (start === null || end === null || start > end || start >= fileSize) {
+    return "invalid";
+  }
+
+  return {
+    end: Math.min(end, fileSize - 1),
+    start,
+  };
+}
+
+function parseNonNegativeInteger(value: string) {
+  if (!/^\d+$/.test(value)) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function parsePositiveInteger(value: string) {
+  const parsed = parseNonNegativeInteger(value);
+
+  return parsed && parsed > 0 ? parsed : null;
 }
 
 function createAttachmentDisposition(fileName: string) {

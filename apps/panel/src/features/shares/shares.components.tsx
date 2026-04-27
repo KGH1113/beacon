@@ -652,6 +652,7 @@ function VideoPreview({
               className="size-full object-contain"
               controls
               playsInline
+              preload="metadata"
               src={streamUrl}
             />
           ) : thumbnailUrl ? (
@@ -713,7 +714,12 @@ function AudioPreview({
           </div>
           {isPlaying ? (
             // biome-ignore lint/a11y/useMediaCaption: Preview derivatives do not have captions in v1.
-            <audio className="w-full" controls src={streamUrl} />
+            <audio
+              className="w-full"
+              controls
+              preload="metadata"
+              src={streamUrl}
+            />
           ) : (
             <Button onClick={() => setIsPlaying(true)} type="button">
               <PlayIcon data-icon="inline-start" />

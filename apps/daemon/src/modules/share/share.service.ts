@@ -33,11 +33,14 @@ import { AppError } from "../../shared/errors/app-error";
 import { ErrorCode } from "../../shared/errors/error-code";
 
 export type ShareDownload = {
+  absolutePath: string;
   body: Blob;
   fileName: string;
   mimeType: string;
   sizeBytes: bigint;
 };
+
+export type ShareFileAsset = Omit<ShareDownload, "body">;
 
 export type SharePreviewAssetType = "stream" | "text" | "thumbnail";
 
@@ -52,6 +55,7 @@ export interface IShareService {
     token: string,
     type: SharePreviewAssetType,
   ) => Promise<ShareDownload>;
+  getPreviewStreamAsset: (token: string) => Promise<ShareFileAsset>;
 }
 
 export class ShareService implements IShareService {
@@ -145,6 +149,7 @@ export class ShareService implements IShareService {
     await this.repository.incrementDownloadCount(share.id);
 
     return {
+      absolutePath: file.absolutePath,
       body: await this.files.readFileBody(share.filePath),
       fileName: share.fileName,
       mimeType: file.mimeType,
@@ -156,6 +161,22 @@ export class ShareService implements IShareService {
     token: string,
     type: SharePreviewAssetType,
   ): Promise<ShareDownload> {
+    const file = await this.getPreviewFileAsset(token, type);
+
+    return {
+      ...file,
+      body: await this.files.readFileBody(file.absolutePath),
+    };
+  }
+
+  async getPreviewStreamAsset(token: string): Promise<ShareFileAsset> {
+    return this.getPreviewFileAsset(token, "stream");
+  }
+
+  private async getPreviewFileAsset(
+    token: string,
+    type: SharePreviewAssetType,
+  ): Promise<ShareFileAsset> {
     const share = await this.getActiveShareRecord(token);
     const filePath = getPreviewPath(share, type);
 
@@ -166,7 +187,7 @@ export class ShareService implements IShareService {
     const file = await this.files.resolveFile(filePath);
 
     return {
-      body: await this.files.readFileBody(filePath),
+      absolutePath: file.absolutePath,
       fileName: file.fileName,
       mimeType: file.mimeType,
       sizeBytes: file.sizeBytes,

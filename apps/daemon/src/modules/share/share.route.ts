@@ -26,8 +26,8 @@ export const sharePublicRoute = new Elysia({
   .get("/preview/:token/thumbnail", ({ params }) =>
     shareController.previewThumbnail(params.token),
   )
-  .get("/stream/:token", ({ params }) =>
-    shareController.previewStream(params.token),
+  .get("/stream/:token", ({ params, request }) =>
+    shareController.previewStream(params.token, request.headers.get("range")),
   )
   .get("/s/:token", ({ params }) => shareController.download(params.token));
 
