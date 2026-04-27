@@ -82,21 +82,27 @@ class DockerCliIntegration implements DockerIntegration {
     const statsById = await this.readStatsById();
     const containers = await Promise.all(
       ids.map(async (id) => {
-        const inspect = await this.inspectContainer(id);
-        const stats = statsById.get(id.slice(0, 12)) ?? statsById.get(id);
-        const recentLogs = await this.readRecentLogs(id);
-        const defaultShell =
-          toDockerState(inspect.State?.Status) === "running"
-            ? await this.detectShell(id)
-            : "/bin/sh";
+        try {
+          const inspect = await this.inspectContainer(id);
+          const stats = statsById.get(id.slice(0, 12)) ?? statsById.get(id);
+          const recentLogs = await this.readRecentLogs(id);
+          const defaultShell =
+            toDockerState(inspect.State?.Status) === "running"
+              ? await this.detectShell(id)
+              : "/bin/sh";
 
-        return toContainerDto(inspect, stats, recentLogs, defaultShell);
+          return toContainerDto(inspect, stats, recentLogs, defaultShell);
+        } catch {
+          return null;
+        }
       }),
     );
 
-    return containers.sort((left, right) =>
-      left.name.localeCompare(right.name),
-    );
+    return containers
+      .filter((container): container is DockerContainerDto =>
+        Boolean(container),
+      )
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async controlContainer(
