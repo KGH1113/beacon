@@ -1,10 +1,11 @@
 "use client";
 
 import type { ShareDto } from "@beacon/shared";
-import { useState } from "react";
+import { toast } from "sonner";
 
 import { mockShares } from "./shares.lib";
 import { UploadShareOutputSchema } from "./shares.schema";
+import { useSharesStore } from "./shares.store";
 
 export function useShares() {
   return {
@@ -29,8 +30,17 @@ export function useShareUpload({
   daemonUploadBaseUrl,
   onShareUploaded,
 }: ShareUploadOptions) {
-  const [isUploading, setIsUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const finishUploadProgress = useSharesStore(
+    (state) => state.finishUploadProgress,
+  );
+  const isUploading = useSharesStore(
+    (state) => state.isUploadProgressVisible && state.uploadProgress < 100,
+  );
+  const progress = useSharesStore((state) => state.uploadProgress);
+  const setUploadProgress = useSharesStore((state) => state.setUploadProgress);
+  const startUploadProgress = useSharesStore(
+    (state) => state.startUploadProgress,
+  );
 
   async function uploadFiles(files: FileList | File[]) {
     const uploadTargets = Array.from(files);
@@ -39,8 +49,7 @@ export function useShareUpload({
       return;
     }
 
-    setIsUploading(true);
-    setProgress(0);
+    startUploadProgress();
 
     try {
       for (let index = 0; index < uploadTargets.length; index += 1) {
@@ -50,16 +59,24 @@ export function useShareUpload({
           onProgress: (fileProgress) => {
             const completed = index / uploadTargets.length;
             const current = fileProgress / uploadTargets.length;
-            setProgress(Math.round((completed + current) * 100));
+            setUploadProgress(Math.round((completed + current) * 100));
           },
         });
 
         onShareUploaded(share);
+        toast.success("Share uploaded", {
+          description: share.fileName,
+        });
       }
 
-      setProgress(100);
+      finishUploadProgress();
     } finally {
-      setIsUploading(false);
+      if (useSharesStore.getState().uploadProgress < 100) {
+        useSharesStore.setState({
+          isUploadProgressVisible: false,
+          uploadProgress: 0,
+        });
+      }
     }
   }
 

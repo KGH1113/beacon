@@ -5,10 +5,9 @@ import {
   FileIcon,
   FileTextIcon,
   ImageIcon,
-  UploadSimpleIcon,
   VideoIcon,
 } from "@phosphor-icons/react/ssr";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
@@ -93,11 +92,11 @@ export function SharesPage({
   const setSelectedShareId = useSharesStore(
     (state) => state.setSelectedShareId,
   );
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepthRef = useRef(0);
+  const isMountedRef = useRef(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [shares, setShares] = useState(initialShares);
-  const { isUploading, progress, uploadFiles } = useShareUpload({
+  const { uploadFiles } = useShareUpload({
     daemonUploadBaseUrl,
     onShareUploaded: addUploadedShare,
   });
@@ -112,6 +111,14 @@ export function SharesPage({
     filteredShares[0] ??
     null;
 
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   function updateShare(updatedShare: ShareDto) {
     setShares((currentShares) =>
       currentShares.map((share) =>
@@ -121,14 +128,15 @@ export function SharesPage({
   }
 
   function addUploadedShare(uploadedShare: ShareDto) {
+    if (!isMountedRef.current) {
+      return;
+    }
+
     setShares((currentShares) => [
       uploadedShare,
       ...currentShares.filter((share) => share.id !== uploadedShare.id),
     ]);
     setSelectedShareId(uploadedShare.id);
-    toast.success("Share uploaded", {
-      description: uploadedShare.fileName,
-    });
   }
 
   async function handleUploadFiles(files: FileList | File[]) {
@@ -189,33 +197,6 @@ export function SharesPage({
         title="Shares"
       />
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <input
-          className="hidden"
-          multiple
-          onChange={(event) => {
-            if (event.currentTarget.files) {
-              void handleUploadFiles(event.currentTarget.files);
-              event.currentTarget.value = "";
-            }
-          }}
-          ref={fileInputRef}
-          type="file"
-        />
-        <Button
-          disabled={isUploading}
-          onClick={() => fileInputRef.current?.click()}
-          type="button"
-          variant="outline"
-        >
-          <UploadSimpleIcon data-icon="inline-start" />
-          {isUploading ? `Uploading ${progress}%` : "Upload files"}
-        </Button>
-        <p className="text-muted-foreground text-sm">
-          파일을 이 화면 어디에든 드롭하면 바로 공유 링크가 생성됩니다.
-        </p>
-      </div>
-
       <div className="flex min-w-0 items-stretch gap-4 overflow-x-auto">
         <SummaryCard label="Active links" value={summary.activeCount} />
         <SummaryCard label="Expiring soon" value={summary.expiringCount} />
@@ -246,7 +227,7 @@ function ShareDropOverlay() {
   return (
     <Card className="pointer-events-none absolute inset-0 z-10 border-dashed bg-background/90">
       <CardContent className="flex h-full flex-col items-center justify-center gap-3 text-center">
-        <UploadSimpleIcon />
+        <FileIcon />
         <CardTitle>Drop files to share</CardTitle>
         <CardDescription>
           업로드가 완료되면 7일 만료 공유 링크가 바로 생성됩니다.
@@ -425,11 +406,16 @@ function ShareDetailCard({
     <Card className="flex min-h-0 flex-col">
       <CardHeader>
         <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <CardTitle>{share.fileName}</CardTitle>
-            <CardDescription>{share.filePath}</CardDescription>
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <CardTitle className="truncate">{share.fileName}</CardTitle>
+            <CardDescription className="break-all text-xs leading-relaxed">
+              {share.filePath}
+            </CardDescription>
           </div>
-          <Badge className={getShareStatusClassName(share)} variant="secondary">
+          <Badge
+            className={cn("shrink-0", getShareStatusClassName(share))}
+            variant="secondary"
+          >
             {getShareStatusLabel(share)}
           </Badge>
         </div>
@@ -492,7 +478,7 @@ function FilePreview({ share }: { share: ShareDto }) {
 
   if (share.preview.thumbnailUrl) {
     return (
-      <Card className="aspect-square overflow-hidden">
+      <Card className="aspect-square overflow-hidden border">
         <CardContent className="flex h-full flex-col gap-3 p-3">
           <div className="min-h-0 flex-1 overflow-hidden rounded-none bg-muted">
             <img
@@ -516,8 +502,8 @@ function FilePreview({ share }: { share: ShareDto }) {
   }
 
   return (
-    <Card className="aspect-square overflow-hidden">
-      <CardContent className="flex h-full flex-col items-center justify-center gap-4 p-6 text-center">
+    <Card className="aspect-square overflow-hidden border">
+      <CardContent className="flex h-full flex-col items-center justify-center gap-4 border-t p-6 text-center">
         <div className="flex size-16 items-center justify-center rounded-none bg-muted">
           <PreviewIcon />
         </div>
