@@ -36,6 +36,14 @@ export const ListSharesOutputSchema = z.object({
   shares: z.array(ShareDtoSchema),
 });
 
+export const UploadShareMetadataSchema = z.object({
+  expiresAt: IsoDatetimeStringSchema.nullable().optional(),
+});
+
+export const UploadShareOutputSchema = z.object({
+  share: ShareDtoSchema,
+});
+
 export const CreateShareInputSchema = z.object({
   filePath: z.string().min(1),
   fileName: z.string().min(1),
@@ -51,5 +59,7 @@ export type SharePreviewDto = z.infer<typeof SharePreviewDtoSchema>;
 export type SharePreviewKind = z.infer<typeof SharePreviewKindSchema>;
 export type ShareStatus = z.infer<typeof ShareStatusSchema>;
 export type ListSharesOutput = z.infer<typeof ListSharesOutputSchema>;
+export type UploadShareMetadata = z.infer<typeof UploadShareMetadataSchema>;
+export type UploadShareOutput = z.infer<typeof UploadShareOutputSchema>;
 export type CreateShareInput = z.infer<typeof CreateShareInputSchema>;
 export type RevokeShareInput = z.infer<typeof RevokeShareInputSchema>;

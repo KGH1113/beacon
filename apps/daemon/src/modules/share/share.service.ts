@@ -8,6 +8,9 @@ import {
   RevokeShareInputSchema,
   type ShareDto,
   ShareDtoSchema,
+  UploadShareMetadataSchema,
+  type UploadShareOutput,
+  UploadShareOutputSchema,
 } from "@beacon/shared";
 
 import {
@@ -27,6 +30,7 @@ export type ShareDownload = {
 export interface IShareService {
   listShares: () => Promise<ListSharesOutput>;
   createShare: (input: unknown) => Promise<ShareDto>;
+  uploadShare: (input: unknown) => Promise<UploadShareOutput>;
   revokeShare: (input: unknown) => Promise<ShareDto>;
   getDownload: (token: string) => Promise<ShareDownload>;
 }
@@ -55,6 +59,22 @@ export class ShareService implements IShareService {
     });
 
     return ShareDtoSchema.parse(share);
+  }
+
+  async uploadShare(input: unknown): Promise<UploadShareOutput> {
+    const upload = parseUploadBody(input);
+    const metadata = UploadShareMetadataSchema.parse({
+      expiresAt: upload.expiresAt,
+    });
+    const file = await this.files.storeUploadedFile(upload.file);
+    const share = await this.repository.create({
+      expiresAt: metadata.expiresAt ?? getDefaultShareExpiry(),
+      fileName: file.fileName,
+      filePath: file.absolutePath,
+      sizeBytes: file.sizeBytes,
+    });
+
+    return UploadShareOutputSchema.parse({ share });
   }
 
   async revokeShare(input: unknown): Promise<ShareDto> {
@@ -91,4 +111,52 @@ export class ShareService implements IShareService {
       sizeBytes: file.sizeBytes,
     };
   }
+}
+
+function parseUploadBody(input: unknown) {
+  if (!isRecord(input)) {
+    throw new AppError(
+      ErrorCode.ValidationFailed,
+      "Invalid upload request.",
+      400,
+    );
+  }
+
+  const file = normalizeUploadFile(input.file);
+
+  if (!file) {
+    throw new AppError(
+      ErrorCode.ValidationFailed,
+      "Upload file is required.",
+      400,
+    );
+  }
+
+  return {
+    expiresAt: typeof input.expiresAt === "string" ? input.expiresAt : null,
+    file,
+  };
+}
+
+function normalizeUploadFile(value: unknown): File | null {
+  if (value instanceof File) {
+    return value;
+  }
+
+  if (Array.isArray(value) && value[0] instanceof File) {
+    return value[0];
+  }
+
+  return null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function getDefaultShareExpiry() {
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 7);
+
+  return expiresAt.toISOString();
 }

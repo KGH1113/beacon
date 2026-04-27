@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, resolve, sep } from "node:path";
 import { z } from "zod";
 
@@ -21,9 +22,14 @@ export type ResolvedShareFile = {
   sizeBytes: bigint;
 };
 
+export type StoredUploadedShareFile = ResolvedShareFile & {
+  originalFileName: string;
+};
+
 export interface ShareFileIntegration {
   resolveFile: (filePath: string) => Promise<ResolvedShareFile>;
   readFileBody: (filePath: string) => Promise<Blob>;
+  storeUploadedFile: (file: File) => Promise<StoredUploadedShareFile>;
 }
 
 export class LocalShareFileIntegration implements ShareFileIntegration {
@@ -69,6 +75,32 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
     });
   }
 
+  async storeUploadedFile(file: File): Promise<StoredUploadedShareFile> {
+    const originalFileName = sanitizeFileName(file.name || "upload.bin");
+    const uploadDir = this.getUploadDirectory();
+    await mkdir(uploadDir, { recursive: true });
+
+    const storedFileName = `${randomUUID()}-${originalFileName}`;
+    const absolutePath = resolve(uploadDir, storedFileName);
+
+    if (!this.isInsideShareRoot(absolutePath)) {
+      throw new AppError(
+        ErrorCode.Forbidden,
+        "Upload destination is outside configured share roots.",
+        403,
+      );
+    }
+
+    await Bun.write(absolutePath, file);
+    const resolvedFile = await this.resolveFile(absolutePath);
+
+    return {
+      ...resolvedFile,
+      fileName: originalFileName,
+      originalFileName,
+    };
+  }
+
   private isInsideShareRoot(absolutePath: string) {
     return this.roots.some((root) => {
       const rootPath = resolve(root.path);
@@ -78,6 +110,15 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
         absolutePath.startsWith(`${rootPath}${sep}`)
       );
     });
+  }
+
+  private getUploadDirectory() {
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+
+    return resolve(this.roots[0].path, "uploads", year, month, day);
   }
 }
 
@@ -131,4 +172,22 @@ function getMimeType(filePath: string) {
   };
 
   return mimeTypes[extension] ?? "application/octet-stream";
+}
+
+function sanitizeFileName(fileName: string) {
+  const sanitized = Array.from(basename(fileName))
+    .map((character) =>
+      isUnsafeFileNameCharacter(character) ? "_" : character,
+    )
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return sanitized || "upload.bin";
+}
+
+function isUnsafeFileNameCharacter(character: string) {
+  const code = character.charCodeAt(0);
+
+  return code < 32 || code === 127 || '/\\?%*:|"<>'.includes(character);
 }

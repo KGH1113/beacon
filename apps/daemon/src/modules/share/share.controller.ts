@@ -1,10 +1,15 @@
-import type { ListSharesOutput, ShareDto } from "@beacon/shared";
+import type {
+  ListSharesOutput,
+  ShareDto,
+  UploadShareOutput,
+} from "@beacon/shared";
 
 import { type IShareService, ShareService } from "./share.service";
 
 export interface IShareController {
   list: () => Promise<ListSharesOutput>;
   create: (input: unknown) => Promise<ShareDto>;
+  upload: (input: unknown) => Promise<UploadShareOutput>;
   revoke: (shareId: string) => Promise<ShareDto>;
   download: (token: string) => Promise<Response>;
 }
@@ -18,6 +23,10 @@ export class ShareController implements IShareController {
 
   async create(input: unknown): Promise<ShareDto> {
     return this.service.createShare(input);
+  }
+
+  async upload(input: unknown): Promise<UploadShareOutput> {
+    return this.service.uploadShare(input);
   }
 
   async revoke(shareId: string): Promise<ShareDto> {

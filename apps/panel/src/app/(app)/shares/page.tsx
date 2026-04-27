@@ -2,12 +2,14 @@ import { SharesPage } from "@/features/shares/shares.components";
 import { fetchSharesForSsr } from "@/features/shares/shares.server";
 
 export default async function SharesRoute() {
-  const { daemonPublicBaseUrl, isFallback, shares } = await fetchSharesForSsr();
+  const { daemonPublicBaseUrl, daemonUploadBaseUrl, isFallback, shares } =
+    await fetchSharesForSsr();
 
   return (
     <main className="min-h-svh p-6">
       <SharesPage
         daemonPublicBaseUrl={daemonPublicBaseUrl}
+        daemonUploadBaseUrl={daemonUploadBaseUrl}
         initialShares={shares}
         isFallback={isFallback}
       />

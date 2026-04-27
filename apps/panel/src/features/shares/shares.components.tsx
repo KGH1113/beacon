@@ -5,9 +5,10 @@ import {
   FileIcon,
   FileTextIcon,
   ImageIcon,
+  UploadSimpleIcon,
   VideoIcon,
 } from "@phosphor-icons/react/ssr";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { DetailPageHeader } from "@/components/detail-page-header";
@@ -44,6 +45,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/utils";
 
 import { revokeShareAction } from "./shares.actions";
+import { useShareUpload } from "./shares.hooks";
 import {
   type ShareFilter,
   filterShares,
@@ -74,12 +76,14 @@ const previewIconByKind = {
 
 type SharesPageProps = {
   daemonPublicBaseUrl: string;
+  daemonUploadBaseUrl: string;
   initialShares: ShareDto[];
   isFallback: boolean;
 };
 
 export function SharesPage({
   daemonPublicBaseUrl,
+  daemonUploadBaseUrl,
   initialShares,
   isFallback,
 }: SharesPageProps) {
@@ -89,7 +93,14 @@ export function SharesPage({
   const setSelectedShareId = useSharesStore(
     (state) => state.setSelectedShareId,
   );
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragDepthRef = useRef(0);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [shares, setShares] = useState(initialShares);
+  const { isUploading, progress, uploadFiles } = useShareUpload({
+    daemonUploadBaseUrl,
+    onShareUploaded: addUploadedShare,
+  });
 
   const summary = getSharesSummary(shares);
   const filteredShares = useMemo(
@@ -109,8 +120,60 @@ export function SharesPage({
     );
   }
 
+  function addUploadedShare(uploadedShare: ShareDto) {
+    setShares((currentShares) => [
+      uploadedShare,
+      ...currentShares.filter((share) => share.id !== uploadedShare.id),
+    ]);
+    setSelectedShareId(uploadedShare.id);
+    toast.success("Share uploaded", {
+      description: uploadedShare.fileName,
+    });
+  }
+
+  async function handleUploadFiles(files: FileList | File[]) {
+    try {
+      await uploadFiles(files);
+    } catch {
+      toast.error("Upload failed");
+    }
+  }
+
   return (
-    <section className="relative flex min-h-[calc(100svh-3rem)] flex-col gap-4">
+    <section
+      className="relative flex min-h-[calc(100svh-3rem)] flex-col gap-4"
+      onDragEnter={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes("Files")) {
+          return;
+        }
+
+        dragDepthRef.current += 1;
+        setIsDraggingFile(true);
+      }}
+      onDragLeave={(event) => {
+        if (!Array.from(event.dataTransfer.types).includes("Files")) {
+          return;
+        }
+
+        dragDepthRef.current -= 1;
+
+        if (dragDepthRef.current <= 0) {
+          dragDepthRef.current = 0;
+          setIsDraggingFile(false);
+        }
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        setIsDraggingFile(true);
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        dragDepthRef.current = 0;
+        setIsDraggingFile(false);
+        void handleUploadFiles(event.dataTransfer.files);
+      }}
+    >
+      {isDraggingFile ? <ShareDropOverlay /> : null}
       <DetailPageHeader
         description={
           isFallback
@@ -125,6 +188,33 @@ export function SharesPage({
         }}
         title="Shares"
       />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <input
+          className="hidden"
+          multiple
+          onChange={(event) => {
+            if (event.currentTarget.files) {
+              void handleUploadFiles(event.currentTarget.files);
+              event.currentTarget.value = "";
+            }
+          }}
+          ref={fileInputRef}
+          type="file"
+        />
+        <Button
+          disabled={isUploading}
+          onClick={() => fileInputRef.current?.click()}
+          type="button"
+          variant="outline"
+        >
+          <UploadSimpleIcon data-icon="inline-start" />
+          {isUploading ? `Uploading ${progress}%` : "Upload files"}
+        </Button>
+        <p className="text-muted-foreground text-sm">
+          파일을 이 화면 어디에든 드롭하면 바로 공유 링크가 생성됩니다.
+        </p>
+      </div>
 
       <div className="flex min-w-0 items-stretch gap-4 overflow-x-auto">
         <SummaryCard label="Active links" value={summary.activeCount} />
@@ -149,6 +239,20 @@ export function SharesPage({
         />
       </div>
     </section>
+  );
+}
+
+function ShareDropOverlay() {
+  return (
+    <Card className="pointer-events-none absolute inset-0 z-10 border-dashed bg-background/90">
+      <CardContent className="flex h-full flex-col items-center justify-center gap-3 text-center">
+        <UploadSimpleIcon />
+        <CardTitle>Drop files to share</CardTitle>
+        <CardDescription>
+          업로드가 완료되면 7일 만료 공유 링크가 바로 생성됩니다.
+        </CardDescription>
+      </CardContent>
+    </Card>
   );
 }
 
