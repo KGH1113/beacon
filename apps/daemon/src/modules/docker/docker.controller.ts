@@ -9,6 +9,7 @@ import { DockerService, type IDockerService } from "./docker.service";
 
 const dockerContainersStreamIntervalMs = 5_000;
 const dockerStreamHeartbeatMs = 20_000;
+const socketIds = new WeakMap<object, string>();
 
 type SocketLike = {
   close: () => void;
@@ -185,6 +186,17 @@ export class DockerController implements IDockerController {
   ) {
     const socketId = getSocketId(socket);
 
+    send(
+      JSON.stringify({
+        type: "docker.exec.output",
+        timestamp: new Date().toISOString(),
+        payload: {
+          data: "Opening Docker TTY session...\r\n",
+          stream: "system",
+        },
+      }),
+    );
+
     void this.service
       .createExecSession(
         containerId,
@@ -257,11 +269,20 @@ function applyExecInput(session: DockerExecSession, input: DockerExecInputDto) {
 }
 
 function getSocketId(socket: SocketRef): string {
-  if (!socket.id) {
-    throw new Error("Docker exec websocket is missing a stable socket id.");
+  if (socket.id) {
+    return socket.id;
   }
 
-  return socket.id;
+  const existingId = socketIds.get(socket);
+
+  if (existingId) {
+    return existingId;
+  }
+
+  const id = globalThis.crypto.randomUUID();
+  socketIds.set(socket, id);
+
+  return id;
 }
 
 function parseSocketInput(input: unknown): DockerExecInputDto {
