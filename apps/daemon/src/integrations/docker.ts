@@ -580,7 +580,7 @@ async function startDockerExecStream(execId: string): Promise<Duplex> {
       const rest = headerBuffer.subarray(headerEnd + 4);
       const statusCode = parseHttpStatusCode(header);
 
-      if (statusCode < 200 || statusCode >= 300) {
+      if ((statusCode < 200 || statusCode >= 300) && statusCode !== 101) {
         socket.destroy();
         reject(
           new DockerCommandError(
