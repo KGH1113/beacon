@@ -4,7 +4,7 @@ import type {
   DockerContainerPortDto,
   DockerContainerState,
 } from "@beacon/shared";
-import Docker from "dockerode";
+import type Dockerode from "dockerode";
 
 export class DockerCommandError extends Error {
   constructor(message: string) {
@@ -75,7 +75,7 @@ export function createDockerIntegration(): DockerIntegration {
 }
 
 class DockerCliIntegration implements DockerIntegration {
-  private engine?: Docker;
+  private engine?: Dockerode;
 
   async listContainers(): Promise<DockerContainerDto[]> {
     const ids = await this.listContainerIds();
@@ -238,11 +238,12 @@ class DockerCliIntegration implements DockerIntegration {
     };
   }
 
-  private getEngine(): Docker {
+  private async getEngine(): Promise<Dockerode> {
     if (this.engine) {
       return this.engine;
     }
 
+    const Docker = (await import("dockerode")).default;
     this.engine = new Docker({ socketPath: "/var/run/docker.sock" });
 
     return this.engine;
