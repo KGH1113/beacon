@@ -21,5 +21,5 @@ export function getDaemonClientBaseUrl(env: PanelEnv = getPanelEnv()) {
 }
 
 export function getSharePublicBaseUrl(env: PanelEnv = getPanelEnv()) {
-  return env.NEXT_PUBLIC_SHARE_BASE_URL ?? "http://localhost:7301";
+  return env.NEXT_PUBLIC_SHARE_BASE_URL ?? "https://kgh.tail234c02.ts.net";
 }
