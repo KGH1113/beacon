@@ -167,6 +167,7 @@ export function useDockerExecSession(
     });
     const fitAddon = new FitAddon();
     const socket = new WebSocket(websocketUrl);
+    let inputBuffer = "";
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -187,14 +188,14 @@ export function useDockerExecSession(
     socket.onopen = () => {
       setConnected(true);
       setShellConnected(true);
-      terminal.writeln("Connected.");
-      terminal.write(`${container.name}:/$ `);
     };
 
     socket.onmessage = (event) => {
       const parsed = DockerExecOutputDtoSchema.parse(JSON.parse(event.data));
 
-      terminal.write(parsed.payload.data);
+      terminal.write(
+        formatDockerExecOutput(parsed.payload.data, container.name),
+      );
     };
 
     socket.onerror = () => {
@@ -218,30 +219,25 @@ export function useDockerExecSession(
         socket.send(
           JSON.stringify({
             type: "docker.exec.input",
-            payload: { data: "\n" },
+            payload: { data: `${inputBuffer}\n` },
           }),
         );
+        inputBuffer = "";
         return;
       }
 
       if (data === "\u007F") {
+        if (inputBuffer.length === 0) {
+          return;
+        }
+
+        inputBuffer = inputBuffer.slice(0, -1);
         terminal.write("\b \b");
-        socket.send(
-          JSON.stringify({
-            type: "docker.exec.input",
-            payload: { data },
-          }),
-        );
         return;
       }
 
+      inputBuffer += data;
       terminal.write(data);
-      socket.send(
-        JSON.stringify({
-          type: "docker.exec.input",
-          payload: { data },
-        }),
-      );
     });
 
     return () => {
@@ -268,6 +264,13 @@ function toWebSocketUrl(baseUrl: string, path: string) {
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
   return url.toString();
+}
+
+function formatDockerExecOutput(data: string, containerName: string) {
+  return data
+    .replaceAll("__BEACON_READY__\n", `Connected.\r\n${containerName}:/$ `)
+    .replaceAll("\n__BEACON_PROMPT__\n", `\r\n${containerName}:/$ `)
+    .replaceAll("__BEACON_PROMPT__\n", `${containerName}:/$ `);
 }
 
 function toLogEntries(lines: string[]): DockerLogLineEntry[] {

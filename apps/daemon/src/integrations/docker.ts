@@ -136,7 +136,7 @@ class DockerCliIntegration implements DockerIntegration {
     onClose: (code: number | null) => void,
   ): DockerExecSession {
     const process = Bun.spawn(
-      ["docker", "exec", "-i", containerId, shell, "-i"],
+      ["docker", "exec", "-i", containerId, shell, "-lc", beaconShellScript],
       {
         stderr: "pipe",
         stdin: "pipe",
@@ -272,6 +272,14 @@ class DockerCliIntegration implements DockerIntegration {
     }
   }
 }
+
+const beaconShellScript = [
+  'printf "__BEACON_READY__\\n"',
+  "while IFS= read -r __beacon_cmd; do",
+  '  eval "$__beacon_cmd"',
+  '  printf "\\n__BEACON_PROMPT__\\n"',
+  "done",
+].join("\n");
 
 async function runDocker(
   args: string[],
