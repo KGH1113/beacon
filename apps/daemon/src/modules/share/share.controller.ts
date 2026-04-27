@@ -125,7 +125,7 @@ function createStreamingFileResponse(
   const source = Bun.file(file.absolutePath);
 
   if (!range) {
-    return new Response(isHeadRequest ? null : source, {
+    return new Response(isHeadRequest ? createEmptyStream() : source, {
       headers: {
         ...baseHeaders,
         "Content-Length": file.sizeBytes.toString(),
@@ -136,7 +136,9 @@ function createStreamingFileResponse(
   const contentLength = String(range.end - range.start + 1);
 
   return new Response(
-    isHeadRequest ? null : source.slice(range.start, range.end + 1),
+    isHeadRequest
+      ? createEmptyStream()
+      : source.slice(range.start, range.end + 1),
     {
       headers: {
         ...baseHeaders,
@@ -146,6 +148,14 @@ function createStreamingFileResponse(
       status: 206,
     },
   );
+}
+
+function createEmptyStream() {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.close();
+    },
+  });
 }
 
 function createUnsatisfiableRangeResponse(sizeLabel: string) {
