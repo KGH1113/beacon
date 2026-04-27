@@ -1,6 +1,12 @@
 "use server";
 
-import { ControlDockerContainerInputSchema } from "./docker.schema";
+import { fetchDaemonJson } from "@/api-client";
+import { getPanelEnv } from "@/env";
+
+import {
+  ControlDockerContainerInputSchema,
+  ControlDockerContainerOutputSchema,
+} from "./docker.schema";
 
 export type DockerActionResult = {
   ok: boolean;
@@ -19,8 +25,27 @@ export async function controlDockerContainerAction(
     };
   }
 
-  return {
-    ok: false,
-    message: "Not connected yet",
-  };
+  try {
+    const env = getPanelEnv();
+
+    await fetchDaemonJson(
+      env.BEACON_DAEMON_URL,
+      `/api/v1/docker/containers/${encodeURIComponent(parsed.data.containerId)}/${parsed.data.action}` as `/${string}`,
+      ControlDockerContainerOutputSchema,
+      {
+        method: "POST",
+      },
+    );
+
+    return {
+      ok: true,
+      message: "Container control requested",
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      message:
+        error instanceof Error ? error.message : "Failed to control container",
+    };
+  }
 }

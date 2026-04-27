@@ -39,7 +39,11 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/utils";
 
 import { controlDockerContainerAction } from "./docker.actions";
-import { useDockerContainers, useDockerExecSession } from "./docker.hooks";
+import {
+  useDockerContainersStream,
+  useDockerExecSession,
+  useDockerLogs,
+} from "./docker.hooks";
 import {
   formatDockerPort,
   getDockerDescription,
@@ -49,8 +53,20 @@ import {
 } from "./docker.lib";
 import { useDockerStore } from "./docker.store";
 
-export function DockerPage() {
-  const { data: containers } = useDockerContainers();
+export function DockerPage({
+  daemonBaseUrl,
+  initialContainers,
+  isFallback,
+}: {
+  daemonBaseUrl: string;
+  initialContainers: DockerContainerDto[];
+  isFallback: boolean;
+}) {
+  const { containers } = useDockerContainersStream(
+    initialContainers,
+    isFallback,
+    daemonBaseUrl,
+  );
   const activeOverlayRect = useDockerStore((state) => state.activeOverlayRect);
   const expandedContainerId = useDockerStore(
     (state) => state.expandedContainerId,
@@ -143,10 +159,16 @@ export function DockerPage() {
   return (
     <section className="relative flex min-h-[calc(100svh-3rem)] flex-col gap-4">
       <DetailPageHeader
-        description={getDockerDescription()}
+        description={
+          isFallback
+            ? `${getDockerDescription()} Daemon 연결 실패로 mock data를 표시 중입니다.`
+            : getDockerDescription()
+        }
         status={{
-          label: `${summary.runningCount} running`,
-          className: "bg-chart-2/20 text-chart-2",
+          label: isFallback ? "Mock" : `${summary.runningCount} running`,
+          className: isFallback
+            ? "bg-chart-5/20 text-chart-5"
+            : "bg-chart-2/20 text-chart-2",
         }}
         title="Docker"
       />
@@ -190,6 +212,7 @@ export function DockerPage() {
       {expandedContainer && activeOverlayRect ? (
         <ContainerWorkspaceOverlay
           container={expandedContainer}
+          daemonBaseUrl={daemonBaseUrl}
           isExpanded={isOverlayExpanded}
           onClose={closeOverlay}
           originRect={activeOverlayRect}
@@ -292,11 +315,13 @@ function ContainerMetric({
 
 function ContainerWorkspaceOverlay({
   container,
+  daemonBaseUrl,
   isExpanded,
   onClose,
   originRect,
 }: {
   container: DockerContainerDto;
+  daemonBaseUrl: string;
   isExpanded: boolean;
   onClose: () => void;
   originRect: { top: number; left: number; width: number; height: number };
@@ -346,9 +371,14 @@ function ContainerWorkspaceOverlay({
         <Card className="flex size-full min-h-0 flex-col overflow-hidden">
           <WorkspaceHeader container={container} onClose={onClose} />
           <CardContent className="flex min-h-0 flex-1 flex-col overflow-y-auto p-0 xl:grid xl:grid-cols-[420px_minmax(0,1fr)] xl:items-stretch xl:overflow-hidden">
-            <ContainerOverview container={container} />
+            <ContainerOverview
+              container={container}
+              daemonBaseUrl={daemonBaseUrl}
+              isWorkspaceReady={isWorkspaceReady}
+            />
             <ContainerShell
               container={container}
+              daemonBaseUrl={daemonBaseUrl}
               isWorkspaceReady={isWorkspaceReady}
             />
           </CardContent>
@@ -462,7 +492,22 @@ function WorkspaceHeader({
   );
 }
 
-function ContainerOverview({ container }: { container: DockerContainerDto }) {
+function ContainerOverview({
+  container,
+  daemonBaseUrl,
+  isWorkspaceReady,
+}: {
+  container: DockerContainerDto;
+  daemonBaseUrl: string;
+  isWorkspaceReady: boolean;
+}) {
+  const { lines } = useDockerLogs(
+    container.id,
+    container.recentLogs,
+    isWorkspaceReady,
+    daemonBaseUrl,
+  );
+
   return (
     <section className="flex flex-none flex-col border-b p-4 xl:h-full xl:min-h-0 xl:border-r xl:border-b-0">
       <div className="flex flex-col gap-1">
@@ -507,8 +552,8 @@ function ContainerOverview({ container }: { container: DockerContainerDto }) {
           <p className="font-medium text-sm">Recent logs</p>
           <ScrollArea className="max-h-48 rounded-none bg-muted p-3 xl:min-h-0 xl:max-h-none xl:flex-1">
             <div className="flex flex-col gap-2 font-mono text-xs">
-              {container.recentLogs.map((line) => (
-                <p key={line}>{line}</p>
+              {lines.map((line) => (
+                <p key={line.id}>{line.line}</p>
               ))}
             </div>
           </ScrollArea>
@@ -529,14 +574,17 @@ function OverviewItem({ label, value }: { label: string; value: string }) {
 
 function ContainerShell({
   container,
+  daemonBaseUrl,
   isWorkspaceReady,
 }: {
   container: DockerContainerDto;
+  daemonBaseUrl: string;
   isWorkspaceReady: boolean;
 }) {
   const shellConnected = useDockerStore((state) => state.shellConnected);
   const { connected, terminalRef } = useDockerExecSession(
     container,
+    daemonBaseUrl,
     isWorkspaceReady,
   );
   const isConnected = connected || shellConnected;
@@ -550,7 +598,7 @@ function ContainerShell({
             Shell
           </CardTitle>
           <CardDescription>
-            Mock docker exec session. Daemon websocket will replace this hook.
+            Container shell bridged through daemon websocket.
           </CardDescription>
         </div>
         <Badge
