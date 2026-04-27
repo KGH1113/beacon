@@ -82,7 +82,7 @@ export class LocalSharePreviewIntegration implements SharePreviewIntegration {
         await runFfmpeg([
           "-y",
           "-ss",
-          "00:00:01",
+          "00:00:00",
           "-i",
           sourceFile.absolutePath,
           "-frames:v",
