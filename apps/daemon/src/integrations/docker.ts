@@ -170,6 +170,7 @@ class DockerCliIntegration implements DockerIntegration {
 
         try {
           process.stdin.write(encoder.encode(data));
+          process.stdin.flush();
         } catch (error) {
           onOutput({
             line: `\r\nFailed to write to docker exec: ${formatError(error)}\r\n`,
