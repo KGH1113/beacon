@@ -170,7 +170,7 @@ export function useDockerExecSession(
     });
     const fitAddon = new FitAddon();
     const socket = new WebSocket(websocketUrl);
-    let inputBuffer = "";
+    let resizeTimeout: ReturnType<typeof setTimeout> | undefined;
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -179,24 +179,46 @@ export function useDockerExecSession(
     terminal.open(terminalElement);
     fitAddon.fit();
     terminal.writeln(`Connecting to ${containerName}...`);
-    terminal.writeln(`docker exec -i ${containerName} ${defaultShell}`);
+    terminal.writeln(`docker exec -it ${containerName} ${defaultShell}`);
 
-    const resizeObserver = new ResizeObserver(() => {
+    const sendResize = () => {
+      if (socket.readyState !== WebSocket.OPEN) {
+        return;
+      }
+
+      socket.send(
+        JSON.stringify({
+          type: "docker.exec.resize",
+          payload: {
+            cols: terminal.cols,
+            rows: terminal.rows,
+          },
+        }),
+      );
+    };
+
+    const scheduleResize = () => {
       fitAddon.fit();
-    });
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+
+      resizeTimeout = setTimeout(sendResize, 80);
+    };
+
+    const resizeObserver = new ResizeObserver(scheduleResize);
     resizeObserver.observe(terminalElement);
 
     socket.onopen = () => {
       setConnected(true);
       setShellConnected(true);
+      scheduleResize();
     };
 
     socket.onmessage = (event) => {
       const parsed = DockerExecOutputDtoSchema.parse(JSON.parse(event.data));
 
-      terminal.write(
-        formatDockerExecOutput(parsed.payload.data, containerName),
-      );
+      terminal.write(parsed.payload.data);
     };
 
     socket.onerror = () => {
@@ -215,33 +237,19 @@ export function useDockerExecSession(
         return;
       }
 
-      if (data === "\r") {
-        terminal.write("\r\n");
-        socket.send(
-          JSON.stringify({
-            type: "docker.exec.input",
-            payload: { data: `${inputBuffer}\n` },
-          }),
-        );
-        inputBuffer = "";
-        return;
-      }
-
-      if (data === "\u007F") {
-        if (inputBuffer.length === 0) {
-          return;
-        }
-
-        inputBuffer = inputBuffer.slice(0, -1);
-        terminal.write("\b \b");
-        return;
-      }
-
-      inputBuffer += data;
-      terminal.write(data);
+      socket.send(
+        JSON.stringify({
+          type: "docker.exec.input",
+          payload: { data },
+        }),
+      );
     });
 
     return () => {
+      if (resizeTimeout) {
+        clearTimeout(resizeTimeout);
+      }
+
       disposable.dispose();
       resizeObserver.disconnect();
       socket.close();
@@ -273,13 +281,6 @@ function toWebSocketUrl(baseUrl: string, path: string) {
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
   return url.toString();
-}
-
-function formatDockerExecOutput(data: string, containerName: string) {
-  return data
-    .replaceAll("__BEACON_READY__\n", `Connected.\r\n${containerName}:/$ `)
-    .replaceAll("\n__BEACON_PROMPT__\n", `\r\n${containerName}:/$ `)
-    .replaceAll("__BEACON_PROMPT__\n", `${containerName}:/$ `);
 }
 
 function toLogEntries(lines: string[]): DockerLogLineEntry[] {

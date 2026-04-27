@@ -65,12 +65,25 @@ export const DockerLogEventDtoSchema = z.object({
   }),
 });
 
-export const DockerExecInputDtoSchema = z.object({
+export const DockerExecInputDataDtoSchema = z.object({
   type: z.literal("docker.exec.input"),
   payload: z.object({
     data: z.string(),
   }),
 });
+
+export const DockerExecResizeDtoSchema = z.object({
+  type: z.literal("docker.exec.resize"),
+  payload: z.object({
+    cols: z.number().int().positive(),
+    rows: z.number().int().positive(),
+  }),
+});
+
+export const DockerExecInputDtoSchema = z.discriminatedUnion("type", [
+  DockerExecInputDataDtoSchema,
+  DockerExecResizeDtoSchema,
+]);
 
 export const DockerExecOutputDtoSchema = z.object({
   type: z.literal("docker.exec.output"),
@@ -102,5 +115,9 @@ export type DockerContainersRealtimeEventDto = z.infer<
   typeof DockerContainersRealtimeEventDtoSchema
 >;
 export type DockerLogEventDto = z.infer<typeof DockerLogEventDtoSchema>;
+export type DockerExecInputDataDto = z.infer<
+  typeof DockerExecInputDataDtoSchema
+>;
+export type DockerExecResizeDto = z.infer<typeof DockerExecResizeDtoSchema>;
 export type DockerExecInputDto = z.infer<typeof DockerExecInputDtoSchema>;
 export type DockerExecOutputDto = z.infer<typeof DockerExecOutputDtoSchema>;

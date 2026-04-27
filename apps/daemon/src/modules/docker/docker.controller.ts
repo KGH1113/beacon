@@ -39,7 +39,7 @@ export interface IDockerController {
 
 export class DockerController implements IDockerController {
   private readonly execSessions = new Map<string, DockerExecSession>();
-  private readonly pendingExecInputs = new Map<string, string[]>();
+  private readonly pendingExecInputs = new Map<string, DockerExecInputDto[]>();
 
   constructor(private readonly service: IDockerService = new DockerService()) {}
 
@@ -199,7 +199,7 @@ export class DockerController implements IDockerController {
         const pendingInputs = this.pendingExecInputs.get(socketId) ?? [];
 
         for (const input of pendingInputs) {
-          session.write(input);
+          applyExecInput(session, input);
         }
 
         this.pendingExecInputs.delete(socketId);
@@ -225,12 +225,12 @@ export class DockerController implements IDockerController {
     const session = this.execSessions.get(socketId);
 
     if (session) {
-      session.write(parsed.payload.data);
+      applyExecInput(session, parsed);
       return;
     }
 
     const pendingInputs = this.pendingExecInputs.get(socketId) ?? [];
-    pendingInputs.push(parsed.payload.data);
+    pendingInputs.push(parsed);
     this.pendingExecInputs.set(socketId, pendingInputs);
   }
 
@@ -245,6 +245,15 @@ export class DockerController implements IDockerController {
     this.execSessions.delete(socketId);
     this.pendingExecInputs.delete(socketId);
   }
+}
+
+function applyExecInput(session: DockerExecSession, input: DockerExecInputDto) {
+  if (input.type === "docker.exec.input") {
+    session.write(input.payload.data);
+    return;
+  }
+
+  session.resize(input.payload);
 }
 
 function getSocketId(socket: SocketRef): string {

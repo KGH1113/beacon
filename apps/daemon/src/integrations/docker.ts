@@ -1,8 +1,10 @@
+import type { Duplex } from "node:stream";
 import type {
   DockerContainerDto,
   DockerContainerPortDto,
   DockerContainerState,
 } from "@beacon/shared";
+import Docker from "dockerode";
 
 export class DockerCommandError extends Error {
   constructor(message: string) {
@@ -18,6 +20,7 @@ export type DockerLogLine = {
 
 export type DockerExecSession = {
   close: () => void;
+  resize: (size: { cols: number; rows: number }) => void;
   write: (data: string) => void;
 };
 
@@ -31,7 +34,7 @@ export interface DockerIntegration {
     shell: string,
     onOutput: (output: DockerLogLine) => void,
     onClose: (code: number | null) => void,
-  ) => DockerExecSession;
+  ) => Promise<DockerExecSession>;
   listContainers: () => Promise<DockerContainerDto[]>;
   streamContainerLogs: (
     containerId: string,
@@ -72,6 +75,8 @@ export function createDockerIntegration(): DockerIntegration {
 }
 
 class DockerCliIntegration implements DockerIntegration {
+  private readonly engine = new Docker({ socketPath: "/var/run/docker.sock" });
+
   async listContainers(): Promise<DockerContainerDto[]> {
     const ids = await this.listContainerIds();
 
@@ -135,28 +140,54 @@ class DockerCliIntegration implements DockerIntegration {
     });
   }
 
-  createExecSession(
+  async createExecSession(
     containerId: string,
     shell: string,
     onOutput: (output: DockerLogLine) => void,
     onClose: (code: number | null) => void,
-  ): DockerExecSession {
-    const process = Bun.spawn(
-      ["docker", "exec", "-i", containerId, shell, "-lc", beaconShellScript],
-      {
-        stderr: "pipe",
-        stdin: "pipe",
-        stdout: "pipe",
-      },
-    );
-    let isClosed = false;
-
-    void readChunks(process.stdout, "stdout", onOutput);
-    void readChunks(process.stderr, "stderr", onOutput);
-    void process.exited.then((code) => {
-      isClosed = true;
-      onClose(code);
+  ): Promise<DockerExecSession> {
+    const exec = await this.engine.getContainer(containerId).exec({
+      AttachStderr: true,
+      AttachStdin: true,
+      AttachStdout: true,
+      Cmd: [shell],
+      Env: ["TERM=xterm-256color"],
+      Tty: true,
     });
+    const stream = await exec.start({
+      hijack: true,
+      stdin: true,
+      Tty: true,
+    });
+    let isClosed = false;
+    let didNotifyClose = false;
+
+    const notifyClose = async () => {
+      if (didNotifyClose) {
+        return;
+      }
+
+      didNotifyClose = true;
+      isClosed = true;
+      const code = await inspectExecExitCode(exec);
+      onClose(code);
+    };
+
+    stream.on("data", (chunk: Buffer | string) => {
+      onOutput({
+        line: chunk.toString(),
+        stream: "stdout",
+      });
+    });
+    stream.on("error", (error: Error) => {
+      onOutput({
+        line: `\r\nDocker exec stream failed: ${formatError(error)}\r\n`,
+        stream: "stderr",
+      });
+      void notifyClose();
+    });
+    stream.on("end", () => void notifyClose());
+    stream.on("close", () => void notifyClose());
 
     return {
       close: () => {
@@ -165,8 +196,16 @@ class DockerCliIntegration implements DockerIntegration {
         }
 
         isClosed = true;
-        process.stdin.end();
-        process.kill();
+        closeDockerStream(stream);
+      },
+      resize: ({ cols, rows }) => {
+        if (isClosed) {
+          return;
+        }
+
+        void exec.resize({ h: rows, w: cols }).catch(() => {
+          // Resize is best-effort. Some images/shells can ignore it safely.
+        });
       },
       write: (data: string) => {
         if (isClosed) {
@@ -174,8 +213,7 @@ class DockerCliIntegration implements DockerIntegration {
         }
 
         try {
-          process.stdin.write(data);
-          process.stdin.flush();
+          stream.write(data);
         } catch (error) {
           onOutput({
             line: `\r\nFailed to write to docker exec: ${formatError(error)}\r\n`,
@@ -279,14 +317,6 @@ class DockerCliIntegration implements DockerIntegration {
   }
 }
 
-const beaconShellScript = [
-  'printf "__BEACON_READY__\\n"',
-  "while IFS= read -r __beacon_cmd; do",
-  '  eval "$__beacon_cmd"',
-  '  printf "\\n__BEACON_PROMPT__\\n"',
-  "done",
-].join("\n");
-
 async function runDocker(
   args: string[],
   options: { includeStderr?: boolean } = {},
@@ -354,36 +384,6 @@ async function readLines(
     }
   } catch {
     // The process can be killed when the browser closes the stream.
-  }
-}
-
-async function readChunks(
-  stream: ReadableStream<Uint8Array> | null,
-  outputStream: "stdout" | "stderr",
-  onOutput: (line: DockerLogLine) => void,
-) {
-  if (!stream) {
-    return;
-  }
-
-  const decoder = new TextDecoder();
-  const reader = stream.getReader();
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-
-      if (done) {
-        break;
-      }
-
-      onOutput({
-        line: decoder.decode(value, { stream: true }),
-        stream: outputStream,
-      });
-    }
-  } catch {
-    // The exec process can be closed while a read is pending.
   }
 }
 
@@ -525,4 +525,28 @@ function normalizeDockerUnits(value: string) {
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error";
+}
+
+async function inspectExecExitCode(exec: Docker.Exec): Promise<number | null> {
+  try {
+    const result = await exec.inspect();
+
+    return result.ExitCode ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function closeDockerStream(stream: Duplex) {
+  try {
+    stream.end();
+  } catch {
+    // The stream might already be closed by Docker.
+  }
+
+  try {
+    stream.destroy();
+  } catch {
+    // The stream might already be destroyed by Docker.
+  }
 }
