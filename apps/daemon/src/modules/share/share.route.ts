@@ -26,12 +26,16 @@ export const sharePublicRoute = new Elysia({
   .get("/preview/:token/thumbnail", ({ params }) =>
     shareController.previewThumbnail(params.token),
   )
-  .get("/stream/:token", ({ params, request }) =>
-    shareController.previewStream(
+  .head("/stream/:token", async ({ params, request, set }) => {
+    const response = await shareController.previewStreamHead(
       params.token,
       request.headers.get("range"),
-      request.method,
-    ),
+    );
+    set.status = response.status;
+    set.headers = response.headers;
+  })
+  .get("/stream/:token", ({ params, request }) =>
+    shareController.previewStream(params.token, request.headers.get("range")),
   )
   .get("/s/:token", ({ params }) => shareController.download(params.token));
 

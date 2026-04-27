@@ -21,11 +21,19 @@ export interface IShareController {
   previewStream: (
     token: string,
     rangeHeader: string | null,
-    method: string,
   ) => Promise<Response>;
+  previewStreamHead: (
+    token: string,
+    rangeHeader: string | null,
+  ) => Promise<StreamHeadResponse>;
   previewText: (token: string) => Promise<Response>;
   previewThumbnail: (token: string) => Promise<Response>;
 }
+
+type StreamHeadResponse = {
+  headers: Record<string, string>;
+  status: number;
+};
 
 export class ShareController implements IShareController {
   constructor(private readonly service: IShareService = new ShareService()) {}
@@ -65,11 +73,23 @@ export class ShareController implements IShareController {
   async previewStream(
     token: string,
     rangeHeader: string | null,
-    method: string,
   ): Promise<Response> {
     const file = await this.service.getPreviewStreamAsset(token);
 
-    return createStreamingFileResponse(file, rangeHeader, method === "HEAD");
+    return createStreamingFileResponse(file, rangeHeader);
+  }
+
+  async previewStreamHead(
+    token: string,
+    rangeHeader: string | null,
+  ): Promise<StreamHeadResponse> {
+    const file = await this.service.getPreviewStreamAsset(token);
+    const response = createStreamingFileResponse(file, rangeHeader);
+
+    return {
+      headers: Object.fromEntries(response.headers.entries()),
+      status: response.status,
+    };
   }
 
   async previewText(token: string): Promise<Response> {
@@ -103,7 +123,6 @@ function createInlineFileResponse(file: {
 function createStreamingFileResponse(
   file: ShareFileAsset,
   rangeHeader: string | null,
-  isHeadRequest: boolean,
 ) {
   const fileSize = Number(file.sizeBytes);
   const baseHeaders = {
@@ -125,7 +144,7 @@ function createStreamingFileResponse(
   const source = Bun.file(file.absolutePath);
 
   if (!range) {
-    return new Response(isHeadRequest ? createEmptyStream() : source, {
+    return new Response(source, {
       headers: {
         ...baseHeaders,
         "Content-Length": file.sizeBytes.toString(),
@@ -135,26 +154,13 @@ function createStreamingFileResponse(
 
   const contentLength = String(range.end - range.start + 1);
 
-  return new Response(
-    isHeadRequest
-      ? createEmptyStream()
-      : source.slice(range.start, range.end + 1),
-    {
-      headers: {
-        ...baseHeaders,
-        "Content-Length": contentLength,
-        "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
-      },
-      status: 206,
+  return new Response(source.slice(range.start, range.end + 1), {
+    headers: {
+      ...baseHeaders,
+      "Content-Length": contentLength,
+      "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
     },
-  );
-}
-
-function createEmptyStream() {
-  return new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.close();
-    },
+    status: 206,
   });
 }
 
