@@ -4,7 +4,7 @@ import type {
   DockerContainerPortDto,
   DockerContainerState,
 } from "@beacon/shared";
-import Docker from "dockerode";
+import type Dockerode from "dockerode";
 
 export class DockerCommandError extends Error {
   constructor(message: string) {
@@ -75,7 +75,7 @@ export function createDockerIntegration(): DockerIntegration {
 }
 
 class DockerCliIntegration implements DockerIntegration {
-  private readonly engine = new Docker({ socketPath: "/var/run/docker.sock" });
+  private engine?: Dockerode;
 
   async listContainers(): Promise<DockerContainerDto[]> {
     const ids = await this.listContainerIds();
@@ -146,7 +146,8 @@ class DockerCliIntegration implements DockerIntegration {
     onOutput: (output: DockerLogLine) => void,
     onClose: (code: number | null) => void,
   ): Promise<DockerExecSession> {
-    const exec = await this.engine.getContainer(containerId).exec({
+    const engine = await this.getEngine();
+    const exec = await engine.getContainer(containerId).exec({
       AttachStderr: true,
       AttachStdin: true,
       AttachStdout: true,
@@ -222,6 +223,17 @@ class DockerCliIntegration implements DockerIntegration {
         }
       },
     };
+  }
+
+  private async getEngine(): Promise<Dockerode> {
+    if (this.engine) {
+      return this.engine;
+    }
+
+    const Docker = (await import("dockerode")).default;
+    this.engine = new Docker({ socketPath: "/var/run/docker.sock" });
+
+    return this.engine;
   }
 
   private async listContainerIds(): Promise<string[]> {
@@ -527,7 +539,9 @@ function formatError(error: unknown) {
   return error instanceof Error ? error.message : "Unknown error";
 }
 
-async function inspectExecExitCode(exec: Docker.Exec): Promise<number | null> {
+async function inspectExecExitCode(exec: {
+  inspect: () => Promise<{ ExitCode?: number | null }>;
+}): Promise<number | null> {
   try {
     const result = await exec.inspect();
 
