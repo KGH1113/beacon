@@ -355,7 +355,7 @@ function ExposureBadge({ port }: { port: SystemOpenPortDto }) {
       className={cn(
         port.exposure === "local" && "bg-muted text-muted-foreground",
         port.exposure === "tailscale" && "bg-chart-2/20 text-chart-2",
-        port.exposure === "tunnel" && "bg-chart-3/20 text-chart-3",
+        port.exposure === "funnel" && "bg-chart-3/20 text-chart-3",
         port.exposure === "public" && "bg-destructive/20 text-destructive",
       )}
       variant="secondary"

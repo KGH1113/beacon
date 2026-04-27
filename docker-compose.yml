@@ -11,19 +11,6 @@ services:
       - NEXT_PUBLIC_DAEMON_BASE_URL=${NEXT_PUBLIC_DAEMON_BASE_URL:-http://kgh:7300}
       - NEXT_PUBLIC_SHARE_BASE_URL=${NEXT_PUBLIC_SHARE_BASE_URL:-http://localhost:7301}
 
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    restart: unless-stopped
-    network_mode: host
-    profiles:
-      - tunnel
-    command:
-      - tunnel
-      - --no-autoupdate
-      - run
-      - --token
-      - ${CLOUDFLARED_TUNNEL_TOKEN:-}
-
   # 초기 권장안은 daemon 을 systemd 로 두는 것.
   # 필요해지면 아래처럼 compose 서비스로 옮길 수 있다.
   # daemon:

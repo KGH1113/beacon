@@ -18,7 +18,7 @@ export const SystemOpenPortDtoSchema = z.object({
   port: z.number().int().min(1).max(65_535),
   protocol: z.enum(["tcp", "udp"]),
   service: z.string(),
-  exposure: z.enum(["local", "tailscale", "tunnel", "public"]),
+  exposure: z.enum(["local", "tailscale", "funnel", "public"]),
 });
 
 export const SystemOverviewDtoSchema = z.object({

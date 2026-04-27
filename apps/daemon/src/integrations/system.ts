@@ -462,7 +462,7 @@ function classifyExposure(
   }
 
   if (port === 80 || port === 443) {
-    return "tunnel";
+    return "funnel";
   }
 
   if (isWildcardAddress(address) || isPublicAddress(address)) {
@@ -476,7 +476,7 @@ function getExposurePriority(exposure: SystemOpenPortDto["exposure"]): number {
   const priorities = {
     local: 0,
     tailscale: 1,
-    tunnel: 2,
+    funnel: 2,
     public: 3,
   } satisfies Record<SystemOpenPortDto["exposure"], number>;
 

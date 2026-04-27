@@ -75,8 +75,8 @@ export const mockSystemOverview = {
   ],
   openPorts: [
     { port: 22, protocol: "tcp", service: "SSH", exposure: "tailscale" },
-    { port: 80, protocol: "tcp", service: "HTTP", exposure: "tunnel" },
-    { port: 443, protocol: "tcp", service: "HTTPS", exposure: "tunnel" },
+    { port: 80, protocol: "tcp", service: "HTTP", exposure: "funnel" },
+    { port: 443, protocol: "tcp", service: "HTTPS", exposure: "funnel" },
     {
       port: 25565,
       protocol: "tcp",

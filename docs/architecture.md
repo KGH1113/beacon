@@ -272,4 +272,4 @@
 
 - daemon: systemd
 - Minecraft 상태: ping 우선, RCON 별도
-- 파일 공유: daemon 의 share endpoint 를 cloudflared tunnel 로 외부 공개
+- 파일 공유: daemon 의 public share server 를 Tailscale Funnel 로 외부 공개
