@@ -12,7 +12,12 @@ const dockerStreamHeartbeatMs = 20_000;
 
 type SocketLike = {
   close: () => void;
+  id: string;
   send: (data: string) => void;
+};
+
+type SocketRef = {
+  id?: string;
 };
 
 export interface IDockerController {
@@ -26,15 +31,15 @@ export interface IDockerController {
     containerId: string,
     send: (data: string) => void,
   ) => void;
-  closeExec: (socket: object) => void;
-  writeExec: (socket: object, input: unknown) => void;
+  closeExec: (socket: SocketRef) => void;
+  writeExec: (socket: SocketRef, input: unknown) => void;
   streamContainers: (signal: AbortSignal) => Response;
   streamLogs: (containerId: string, signal: AbortSignal) => Response;
 }
 
 export class DockerController implements IDockerController {
-  private readonly execSessions = new WeakMap<object, DockerExecSession>();
-  private readonly pendingExecInputs = new WeakMap<object, string[]>();
+  private readonly execSessions = new Map<string, DockerExecSession>();
+  private readonly pendingExecInputs = new Map<string, string[]>();
 
   constructor(private readonly service: IDockerService = new DockerService()) {}
 
@@ -178,6 +183,8 @@ export class DockerController implements IDockerController {
     containerId: string,
     send: (data: string) => void,
   ) {
+    const socketId = getSocketId(socket);
+
     void this.service
       .createExecSession(
         containerId,
@@ -188,14 +195,14 @@ export class DockerController implements IDockerController {
         },
       )
       .then((session) => {
-        this.execSessions.set(socket, session);
-        const pendingInputs = this.pendingExecInputs.get(socket) ?? [];
+        this.execSessions.set(socketId, session);
+        const pendingInputs = this.pendingExecInputs.get(socketId) ?? [];
 
         for (const input of pendingInputs) {
           session.write(input);
         }
 
-        this.pendingExecInputs.delete(socket);
+        this.pendingExecInputs.delete(socketId);
       })
       .catch((error: unknown) => {
         send(
@@ -212,30 +219,40 @@ export class DockerController implements IDockerController {
       });
   }
 
-  writeExec(socket: object, input: unknown) {
+  writeExec(socket: SocketRef, input: unknown) {
     const parsed = parseSocketInput(input);
-    const session = this.execSessions.get(socket);
+    const socketId = getSocketId(socket);
+    const session = this.execSessions.get(socketId);
 
     if (session) {
       session.write(parsed.payload.data);
       return;
     }
 
-    const pendingInputs = this.pendingExecInputs.get(socket) ?? [];
+    const pendingInputs = this.pendingExecInputs.get(socketId) ?? [];
     pendingInputs.push(parsed.payload.data);
-    this.pendingExecInputs.set(socket, pendingInputs);
+    this.pendingExecInputs.set(socketId, pendingInputs);
   }
 
-  closeExec(socket: object) {
-    const session = this.execSessions.get(socket);
+  closeExec(socket: SocketRef) {
+    const socketId = getSocketId(socket);
+    const session = this.execSessions.get(socketId);
 
     if (session) {
       session.close();
     }
 
-    this.execSessions.delete(socket);
-    this.pendingExecInputs.delete(socket);
+    this.execSessions.delete(socketId);
+    this.pendingExecInputs.delete(socketId);
   }
+}
+
+function getSocketId(socket: SocketRef): string {
+  if (!socket.id) {
+    throw new Error("Docker exec websocket is missing a stable socket id.");
+  }
+
+  return socket.id;
 }
 
 function parseSocketInput(input: unknown): DockerExecInputDto {
