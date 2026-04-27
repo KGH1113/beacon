@@ -4,62 +4,70 @@ import { create } from "@/zustand";
 
 import type { ShareFilter } from "./shares.lib";
 
+export type ShareUploadProgressItem = {
+  fileName: string;
+  id: string;
+  progress: number;
+};
+
 type SharesStore = {
   activeFilter: ShareFilter;
-  isUploadProgressVisible: boolean;
-  uploadProgress: number;
-  uploadProgressResetTimer: ReturnType<typeof setTimeout> | null;
   selectedShareId: string | null;
+  uploadProgressItems: ShareUploadProgressItem[];
+  failUploadProgress: (id: string) => void;
+  finishUploadProgress: (id: string) => void;
   setActiveFilter: (value: ShareFilter) => void;
   setSelectedShareId: (value: string | null) => void;
-  setUploadProgress: (value: number) => void;
-  startUploadProgress: () => void;
-  finishUploadProgress: () => void;
+  setUploadProgress: (id: string, value: number) => void;
+  startUploadProgress: (item: ShareUploadProgressItem) => void;
 };
 
 export const useSharesStore = create<SharesStore>((set) => ({
   activeFilter: "all",
-  isUploadProgressVisible: false,
   selectedShareId: null,
-  uploadProgress: 0,
-  uploadProgressResetTimer: null,
+  uploadProgressItems: [],
+  failUploadProgress: (id) => {
+    set((state) => ({
+      uploadProgressItems: state.uploadProgressItems.filter(
+        (item) => item.id !== id,
+      ),
+    }));
+  },
+  finishUploadProgress: (id) => {
+    set((state) => ({
+      uploadProgressItems: state.uploadProgressItems.map((item) =>
+        item.id === id ? { ...item, progress: 100 } : item,
+      ),
+    }));
+
+    setTimeout(() => {
+      set((state) => ({
+        uploadProgressItems: state.uploadProgressItems.filter(
+          (item) => item.id !== id,
+        ),
+      }));
+    }, 700);
+  },
   setActiveFilter: (value) => set({ activeFilter: value }),
   setSelectedShareId: (value) => set({ selectedShareId: value }),
-  setUploadProgress: (value) =>
-    set({
-      isUploadProgressVisible: true,
-      uploadProgress: Math.max(0, Math.min(100, value)),
-    }),
-  startUploadProgress: () =>
-    set((state) => {
-      if (state.uploadProgressResetTimer) {
-        clearTimeout(state.uploadProgressResetTimer);
-      }
-
-      return {
-        isUploadProgressVisible: true,
-        uploadProgress: 0,
-        uploadProgressResetTimer: null,
-      };
-    }),
-  finishUploadProgress: () =>
-    set((state) => {
-      if (state.uploadProgressResetTimer) {
-        clearTimeout(state.uploadProgressResetTimer);
-      }
-
-      const uploadProgressResetTimer = setTimeout(() => {
-        set({
-          isUploadProgressVisible: false,
-          uploadProgress: 0,
-          uploadProgressResetTimer: null,
-        });
-      }, 700);
-
-      return {
-        isUploadProgressVisible: true,
-        uploadProgress: 100,
-        uploadProgressResetTimer,
-      };
-    }),
+  setUploadProgress: (id, value) =>
+    set((state) => ({
+      uploadProgressItems: state.uploadProgressItems.map((item) =>
+        item.id === id
+          ? { ...item, progress: Math.max(0, Math.min(100, value)) }
+          : item,
+      ),
+    })),
+  startUploadProgress: (item) =>
+    set((state) => ({
+      uploadProgressItems: [
+        ...state.uploadProgressItems.filter(
+          (uploadItem) => uploadItem.id !== item.id,
+        ),
+        {
+          ...item,
+          progress: Math.max(0, Math.min(100, item.progress)),
+        },
+      ],
+    })),
 }));

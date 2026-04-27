@@ -30,16 +30,18 @@ export function useShareUpload({
   daemonUploadBaseUrl,
   onShareUploaded,
 }: ShareUploadOptions) {
+  const failUploadProgress = useSharesStore(
+    (state) => state.failUploadProgress,
+  );
   const finishUploadProgress = useSharesStore(
     (state) => state.finishUploadProgress,
   );
-  const isUploading = useSharesStore(
-    (state) => state.isUploadProgressVisible && state.uploadProgress < 100,
-  );
-  const progress = useSharesStore((state) => state.uploadProgress);
   const setUploadProgress = useSharesStore((state) => state.setUploadProgress);
   const startUploadProgress = useSharesStore(
     (state) => state.startUploadProgress,
+  );
+  const uploadProgressItems = useSharesStore(
+    (state) => state.uploadProgressItems,
   );
 
   async function uploadFiles(files: FileList | File[]) {
@@ -49,42 +51,52 @@ export function useShareUpload({
       return;
     }
 
-    startUploadProgress();
+    await Promise.allSettled(
+      uploadTargets.map(async (file, index) => {
+        const uploadId = createUploadId(file, index);
+        startUploadProgress({
+          fileName: file.name,
+          id: uploadId,
+          progress: 0,
+        });
 
-    try {
-      for (let index = 0; index < uploadTargets.length; index += 1) {
         const share = await uploadShareFile({
           daemonUploadBaseUrl,
-          file: uploadTargets[index],
+          file,
           onProgress: (fileProgress) => {
-            const completed = index / uploadTargets.length;
-            const current = fileProgress / uploadTargets.length;
-            setUploadProgress(Math.round((completed + current) * 100));
+            setUploadProgress(uploadId, Math.round(fileProgress * 100));
           },
+        }).catch((error) => {
+          failUploadProgress(uploadId);
+          toast.error("Upload failed", {
+            description: file.name,
+          });
+
+          throw error;
         });
 
         onShareUploaded(share);
+        finishUploadProgress(uploadId);
         toast.success("Share uploaded", {
           description: share.fileName,
         });
-      }
-
-      finishUploadProgress();
-    } finally {
-      if (useSharesStore.getState().uploadProgress < 100) {
-        useSharesStore.setState({
-          isUploadProgressVisible: false,
-          uploadProgress: 0,
-        });
-      }
-    }
+      }),
+    );
   }
 
   return {
-    isUploading,
-    progress,
+    isUploading: uploadProgressItems.length > 0,
+    progress: uploadProgressItems,
     uploadFiles,
   };
+}
+
+function createUploadId(file: File, index: number) {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${index}-${file.name}`;
 }
 
 function uploadShareFile({
