@@ -687,7 +687,7 @@ async function dockerSocketRequest(request: string) {
   const chunks: Buffer[] = [];
 
   await new Promise<void>((resolve, reject) => {
-    socket.once("connect", () => socket.end(request));
+    socket.once("connect", () => socket.write(request));
     socket.on("data", (chunk: Buffer) => chunks.push(chunk));
     socket.on("error", reject);
     socket.on("end", resolve);
