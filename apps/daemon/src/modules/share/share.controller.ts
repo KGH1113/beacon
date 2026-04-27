@@ -21,6 +21,7 @@ export interface IShareController {
   previewStream: (
     token: string,
     rangeHeader: string | null,
+    method: string,
   ) => Promise<Response>;
   previewText: (token: string) => Promise<Response>;
   previewThumbnail: (token: string) => Promise<Response>;
@@ -64,10 +65,11 @@ export class ShareController implements IShareController {
   async previewStream(
     token: string,
     rangeHeader: string | null,
+    method: string,
   ): Promise<Response> {
     const file = await this.service.getPreviewStreamAsset(token);
 
-    return createStreamingFileResponse(file, rangeHeader);
+    return createStreamingFileResponse(file, rangeHeader, method === "HEAD");
   }
 
   async previewText(token: string): Promise<Response> {
@@ -101,6 +103,7 @@ function createInlineFileResponse(file: {
 function createStreamingFileResponse(
   file: ShareFileAsset,
   rangeHeader: string | null,
+  isHeadRequest: boolean,
 ) {
   const fileSize = Number(file.sizeBytes);
   const baseHeaders = {
@@ -122,7 +125,7 @@ function createStreamingFileResponse(
   const source = Bun.file(file.absolutePath);
 
   if (!range) {
-    return new Response(source, {
+    return new Response(isHeadRequest ? null : source, {
       headers: {
         ...baseHeaders,
         "Content-Length": file.sizeBytes.toString(),
@@ -130,14 +133,19 @@ function createStreamingFileResponse(
     });
   }
 
-  return new Response(source.slice(range.start, range.end + 1), {
-    headers: {
-      ...baseHeaders,
-      "Content-Length": String(range.end - range.start + 1),
-      "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+  const contentLength = String(range.end - range.start + 1);
+
+  return new Response(
+    isHeadRequest ? null : source.slice(range.start, range.end + 1),
+    {
+      headers: {
+        ...baseHeaders,
+        "Content-Length": contentLength,
+        "Content-Range": `bytes ${range.start}-${range.end}/${fileSize}`,
+      },
+      status: 206,
     },
-    status: 206,
-  });
+  );
 }
 
 function createUnsatisfiableRangeResponse(sizeLabel: string) {
