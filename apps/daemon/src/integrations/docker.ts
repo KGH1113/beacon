@@ -145,19 +145,7 @@ class DockerCliIntegration implements DockerIntegration {
     onClose: (code: number | null) => void,
   ): Promise<DockerExecSession> {
     const execId = await createDockerExec(containerId, shell);
-    onOutput({
-      line: "Docker Engine client ready.\r\n",
-      stream: "stdout",
-    });
-    onOutput({
-      line: "Docker exec object created.\r\n",
-      stream: "stdout",
-    });
     const stream = await startDockerExecStream(execId);
-    onOutput({
-      line: "Docker TTY stream attached.\r\n",
-      stream: "stdout",
-    });
     let isClosed = false;
     let didNotifyClose = false;
 

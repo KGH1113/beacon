@@ -186,17 +186,6 @@ export class DockerController implements IDockerController {
   ) {
     const socketId = getSocketId(socket);
 
-    send(
-      JSON.stringify({
-        type: "docker.exec.output",
-        timestamp: new Date().toISOString(),
-        payload: {
-          data: "Opening Docker TTY session...\r\n",
-          stream: "system",
-        },
-      }),
-    );
-
     void this.service
       .createExecSession(
         containerId,
