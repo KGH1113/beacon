@@ -151,7 +151,7 @@ class DockerCliIntegration implements DockerIntegration {
       AttachStderr: true,
       AttachStdin: true,
       AttachStdout: true,
-      Cmd: [shell],
+      Cmd: [shell, "-i"],
       Env: ["TERM=xterm-256color"],
       Tty: true,
     });
