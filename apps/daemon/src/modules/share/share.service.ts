@@ -73,7 +73,7 @@ export class ShareService implements IShareService {
       throw new AppError(ErrorCode.NotFound, "Share was not found.", 404);
     }
 
-    await this.files.deleteUploadedFile(share.filePath);
+    await this.files.deleteSharedFile(share.filePath);
     await this.files.deletePreviewDirectory(share.id);
     await this.repository.delete(share.id);
 

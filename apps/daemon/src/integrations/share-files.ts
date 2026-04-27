@@ -29,7 +29,7 @@ export type StoredUploadedShareFile = ResolvedShareFile & {
 export interface ShareFileIntegration {
   createPreviewDirectory: (shareId: string) => Promise<string>;
   deletePreviewDirectory: (shareId: string) => Promise<void>;
-  deleteUploadedFile: (filePath: string) => Promise<void>;
+  deleteSharedFile: (filePath: string) => Promise<void>;
   resolveFile: (filePath: string) => Promise<ResolvedShareFile>;
   readFileBody: (filePath: string) => Promise<Blob>;
   storeUploadedFile: (file: File) => Promise<StoredUploadedShareFile>;
@@ -76,19 +76,24 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
     });
   }
 
-  async deleteUploadedFile(filePath: string): Promise<void> {
+  async deleteSharedFile(filePath: string): Promise<void> {
     const absolutePath = resolve(filePath);
 
-    if (!this.isUploadedFilePath(absolutePath)) {
+    if (
+      !this.isInsideShareRoot(absolutePath) ||
+      this.isBeaconInternalPath(absolutePath)
+    ) {
       throw new AppError(
         ErrorCode.Forbidden,
-        "Only Beacon-uploaded files can be deleted from this action.",
+        "Only shared files inside configured share roots can be deleted.",
         403,
       );
     }
 
+    let fileStat: Awaited<ReturnType<typeof stat>>;
+
     try {
-      await unlink(absolutePath);
+      fileStat = await stat(absolutePath);
     } catch (error) {
       if (isFileNotFoundError(error)) {
         return;
@@ -96,6 +101,16 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
 
       throw error;
     }
+
+    if (!fileStat.isFile()) {
+      throw new AppError(
+        ErrorCode.Forbidden,
+        "Only files can be deleted.",
+        403,
+      );
+    }
+
+    await unlink(absolutePath);
   }
 
   async resolveFile(filePath: string): Promise<ResolvedShareFile> {
@@ -188,10 +203,15 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
     return resolve(this.roots[0].path, ".beacon", "previews", shareId);
   }
 
-  private isUploadedFilePath(absolutePath: string) {
-    const uploadRoot = resolve(this.roots[0].path, "uploads");
+  private isBeaconInternalPath(absolutePath: string) {
+    return this.roots.some((root) => {
+      const internalPath = resolve(root.path, ".beacon");
 
-    return absolutePath.startsWith(`${uploadRoot}${sep}`);
+      return (
+        absolutePath === internalPath ||
+        absolutePath.startsWith(`${internalPath}${sep}`)
+      );
+    });
   }
 }
 
