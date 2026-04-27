@@ -1,10 +1,10 @@
+import { createConnection } from "node:net";
 import type { Duplex } from "node:stream";
 import type {
   DockerContainerDto,
   DockerContainerPortDto,
   DockerContainerState,
 } from "@beacon/shared";
-import type Dockerode from "dockerode";
 
 export class DockerCommandError extends Error {
   constructor(message: string) {
@@ -75,8 +75,6 @@ export function createDockerIntegration(): DockerIntegration {
 }
 
 class DockerCliIntegration implements DockerIntegration {
-  private engine?: Dockerode;
-
   async listContainers(): Promise<DockerContainerDto[]> {
     const ids = await this.listContainerIds();
 
@@ -146,29 +144,16 @@ class DockerCliIntegration implements DockerIntegration {
     onOutput: (output: DockerLogLine) => void,
     onClose: (code: number | null) => void,
   ): Promise<DockerExecSession> {
-    const engine = await this.getEngine();
+    const execId = await createDockerExec(containerId, shell);
     onOutput({
       line: "Docker Engine client ready.\r\n",
       stream: "stdout",
-    });
-    const exec = await engine.getContainer(containerId).exec({
-      AttachStderr: true,
-      AttachStdin: true,
-      AttachStdout: true,
-      Cmd: [shell, "-i"],
-      Env: ["TERM=xterm-256color"],
-      Tty: true,
     });
     onOutput({
       line: "Docker exec object created.\r\n",
       stream: "stdout",
     });
-    const stream = await exec.start({
-      Detach: false,
-      Tty: true,
-      hijack: true,
-      stdin: true,
-    });
+    const stream = await startDockerExecStream(execId);
     onOutput({
       line: "Docker TTY stream attached.\r\n",
       stream: "stdout",
@@ -183,7 +168,7 @@ class DockerCliIntegration implements DockerIntegration {
 
       didNotifyClose = true;
       isClosed = true;
-      const code = await inspectExecExitCode(exec);
+      const code = await inspectExecExitCode(execId);
       onClose(code);
     };
 
@@ -217,7 +202,7 @@ class DockerCliIntegration implements DockerIntegration {
           return;
         }
 
-        void exec.resize({ h: rows, w: cols }).catch(() => {
+        void resizeDockerExec(execId, rows, cols).catch(() => {
           // Resize is best-effort. Some images/shells can ignore it safely.
         });
       },
@@ -236,17 +221,6 @@ class DockerCliIntegration implements DockerIntegration {
         }
       },
     };
-  }
-
-  private async getEngine(): Promise<Dockerode> {
-    if (this.engine) {
-      return this.engine;
-    }
-
-    const Docker = (await import("dockerode")).default;
-    this.engine = new Docker({ socketPath: "/var/run/docker.sock" });
-
-    return this.engine;
   }
 
   private async listContainerIds(): Promise<string[]> {
@@ -548,20 +522,204 @@ function normalizeDockerUnits(value: string) {
     .replaceAll("TiB", "TB");
 }
 
-function formatError(error: unknown) {
-  return error instanceof Error ? error.message : "Unknown error";
+async function createDockerExec(containerId: string, shell: string) {
+  const result = await dockerApiJson<{ Id?: string }>(
+    "POST",
+    `/containers/${encodeURIComponent(containerId)}/exec`,
+    {
+      AttachStderr: true,
+      AttachStdin: true,
+      AttachStdout: true,
+      Cmd: [shell, "-i"],
+      Env: ["TERM=xterm-256color"],
+      Tty: true,
+    },
+  );
+
+  if (!result.Id) {
+    throw new DockerCommandError("Docker did not return an exec id.");
+  }
+
+  return result.Id;
 }
 
-async function inspectExecExitCode(exec: {
-  inspect: () => Promise<{ ExitCode?: number | null }>;
-}): Promise<number | null> {
+async function startDockerExecStream(execId: string): Promise<Duplex> {
+  const body = JSON.stringify({
+    Detach: false,
+    Tty: true,
+  });
+  const socket = createConnection({ path: "/var/run/docker.sock" });
+  let headerBuffer = Buffer.alloc(0);
+
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      socket.off("data", onData);
+      socket.off("error", onError);
+      socket.off("close", onClose);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(
+        new DockerCommandError("Docker exec stream closed before attach."),
+      );
+    };
+    const onData = (chunk: Buffer) => {
+      headerBuffer = Buffer.concat([headerBuffer, chunk]);
+      const headerEnd = headerBuffer.indexOf("\r\n\r\n");
+
+      if (headerEnd === -1) {
+        return;
+      }
+
+      cleanup();
+      const header = headerBuffer.subarray(0, headerEnd).toString();
+      const rest = headerBuffer.subarray(headerEnd + 4);
+      const statusCode = parseHttpStatusCode(header);
+
+      if (statusCode < 200 || statusCode >= 300) {
+        socket.destroy();
+        reject(
+          new DockerCommandError(
+            `Docker exec attach failed with status ${statusCode}.`,
+          ),
+        );
+        return;
+      }
+
+      if (rest.length > 0) {
+        socket.unshift(rest);
+      }
+
+      resolve();
+    };
+
+    socket.once("connect", () => {
+      socket.write(
+        [
+          `POST /exec/${encodeURIComponent(execId)}/start HTTP/1.1`,
+          "Host: docker",
+          "Connection: Upgrade",
+          "Upgrade: tcp",
+          "Content-Type: application/json",
+          `Content-Length: ${Buffer.byteLength(body)}`,
+          "",
+          body,
+        ].join("\r\n"),
+      );
+    });
+    socket.on("data", onData);
+    socket.on("error", onError);
+    socket.on("close", onClose);
+  });
+
+  return socket;
+}
+
+async function resizeDockerExec(execId: string, rows: number, cols: number) {
+  await dockerApiText(
+    "POST",
+    `/exec/${encodeURIComponent(execId)}/resize?h=${rows}&w=${cols}`,
+  );
+}
+
+async function inspectExecExitCode(execId: string): Promise<number | null> {
   try {
-    const result = await exec.inspect();
+    const result = await dockerApiJson<{ ExitCode?: number | null }>(
+      "GET",
+      `/exec/${encodeURIComponent(execId)}/json`,
+    );
 
     return result.ExitCode ?? null;
   } catch {
     return null;
   }
+}
+
+async function dockerApiJson<T>(
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+): Promise<T> {
+  const text = await dockerApiText(method, path, body);
+
+  return JSON.parse(text) as T;
+}
+
+async function dockerApiText(
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+): Promise<string> {
+  const bodyText = body ? JSON.stringify(body) : "";
+  const response = await dockerSocketRequest(
+    [
+      `${method} ${path} HTTP/1.1`,
+      "Host: docker",
+      "Connection: close",
+      ...(body
+        ? [
+            "Content-Type: application/json",
+            `Content-Length: ${Buffer.byteLength(bodyText)}`,
+          ]
+        : ["Content-Length: 0"]),
+      "",
+      bodyText,
+    ].join("\r\n"),
+  );
+  const statusCode = parseHttpStatusCode(response.header);
+
+  if (statusCode < 200 || statusCode >= 300) {
+    throw new DockerCommandError(
+      response.body.trim() ||
+        `Docker API ${method} ${path} failed with status ${statusCode}.`,
+    );
+  }
+
+  return response.body;
+}
+
+async function dockerSocketRequest(request: string) {
+  const socket = createConnection({ path: "/var/run/docker.sock" });
+  const chunks: Buffer[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    socket.once("connect", () => socket.end(request));
+    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
+    socket.on("error", reject);
+    socket.on("end", resolve);
+    socket.on("close", resolve);
+  });
+
+  const response = Buffer.concat(chunks);
+  const headerEnd = response.indexOf("\r\n\r\n");
+
+  if (headerEnd === -1) {
+    throw new DockerCommandError("Docker API returned an invalid response.");
+  }
+
+  return {
+    body: response.subarray(headerEnd + 4).toString(),
+    header: response.subarray(0, headerEnd).toString(),
+  };
+}
+
+function parseHttpStatusCode(header: string) {
+  const firstLine = header.split("\r\n")[0] ?? "";
+  const statusCode = Number(firstLine.split(" ")[1]);
+
+  if (!Number.isFinite(statusCode)) {
+    throw new DockerCommandError("Docker API returned an invalid status line.");
+  }
+
+  return statusCode;
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown error";
 }
 
 function closeDockerStream(stream: Duplex) {
