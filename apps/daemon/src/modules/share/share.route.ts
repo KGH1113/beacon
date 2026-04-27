@@ -13,6 +13,7 @@ export const shareRoute = new Elysia({
   .get("", () => shareController.list())
   .post("/upload", ({ body }) => shareController.upload(body))
   .post("", ({ body }) => shareController.create(body))
+  .delete("/:id/file", ({ params }) => shareController.deleteFile(params.id))
   .delete("/:id", ({ params }) => shareController.revoke(params.id));
 
 export const sharePublicRoute = new Elysia({

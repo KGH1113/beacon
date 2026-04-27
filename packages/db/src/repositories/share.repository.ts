@@ -43,6 +43,8 @@ export type SharePreviewRecordInput = {
 export type ShareFileRecord = PersistedShare;
 
 export interface ShareRepository {
+  delete: (shareId: string) => Promise<ShareDto | null>;
+  findRecordById: (shareId: string) => Promise<ShareFileRecord | null>;
   list: () => Promise<ShareDto[]>;
   create: (input: CreateShareRecordInput) => Promise<ShareDto>;
   revoke: (shareId: string) => Promise<ShareDto | null>;
@@ -89,6 +91,32 @@ function toShareDto(share: PersistedShare): ShareDto {
 
 export class PrismaShareRepository implements ShareRepository {
   constructor(private readonly prisma: PrismaClient = getPrismaClient()) {}
+
+  async delete(shareId: string): Promise<ShareDto | null> {
+    try {
+      const share = await this.prisma.share.delete({
+        where: {
+          id: shareId,
+        },
+      });
+
+      return toShareDto(share);
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        return null;
+      }
+
+      throw error;
+    }
+  }
+
+  async findRecordById(shareId: string): Promise<ShareFileRecord | null> {
+    return this.prisma.share.findUnique({
+      where: {
+        id: shareId,
+      },
+    });
+  }
 
   async list(): Promise<ShareDto[]> {
     const shares = await this.prisma.share.findMany({

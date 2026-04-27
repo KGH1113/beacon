@@ -1,4 +1,5 @@
 import type {
+  DeleteShareFileOutput,
   ListSharesOutput,
   ShareDto,
   UploadShareOutput,
@@ -7,6 +8,7 @@ import type {
 import { type IShareService, ShareService } from "./share.service";
 
 export interface IShareController {
+  deleteFile: (shareId: string) => Promise<DeleteShareFileOutput>;
   list: () => Promise<ListSharesOutput>;
   create: (input: unknown) => Promise<ShareDto>;
   upload: (input: unknown) => Promise<UploadShareOutput>;
@@ -19,6 +21,10 @@ export interface IShareController {
 
 export class ShareController implements IShareController {
   constructor(private readonly service: IShareService = new ShareService()) {}
+
+  async deleteFile(shareId: string): Promise<DeleteShareFileOutput> {
+    return this.service.deleteShareFile({ shareId });
+  }
 
   async list(): Promise<ListSharesOutput> {
     return this.service.listShares();

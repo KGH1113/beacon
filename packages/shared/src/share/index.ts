@@ -61,6 +61,14 @@ export const RevokeShareInputSchema = z.object({
   shareId: IdSchema,
 });
 
+export const DeleteShareFileInputSchema = z.object({
+  shareId: IdSchema,
+});
+
+export const DeleteShareFileOutputSchema = z.object({
+  shareId: IdSchema,
+});
+
 export type ShareDto = z.infer<typeof ShareDtoSchema>;
 export type SharePreviewDto = z.infer<typeof SharePreviewDtoSchema>;
 export type SharePreviewKind = z.infer<typeof SharePreviewKindSchema>;
@@ -71,3 +79,5 @@ export type UploadShareMetadata = z.infer<typeof UploadShareMetadataSchema>;
 export type UploadShareOutput = z.infer<typeof UploadShareOutputSchema>;
 export type CreateShareInput = z.infer<typeof CreateShareInputSchema>;
 export type RevokeShareInput = z.infer<typeof RevokeShareInputSchema>;
+export type DeleteShareFileInput = z.infer<typeof DeleteShareFileInputSchema>;
+export type DeleteShareFileOutput = z.infer<typeof DeleteShareFileOutputSchema>;

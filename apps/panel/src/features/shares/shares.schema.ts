@@ -1,5 +1,7 @@
 export {
   CreateShareInputSchema,
+  DeleteShareFileInputSchema,
+  DeleteShareFileOutputSchema,
   ListSharesOutputSchema,
   RevokeShareInputSchema,
   ShareDtoSchema,

@@ -6,6 +6,10 @@ import {
 import {
   type CreateShareInput,
   CreateShareInputSchema,
+  type DeleteShareFileInput,
+  DeleteShareFileInputSchema,
+  type DeleteShareFileOutput,
+  DeleteShareFileOutputSchema,
   type ListSharesOutput,
   ListSharesOutputSchema,
   type RevokeShareInput,
@@ -38,6 +42,7 @@ export type ShareDownload = {
 export type SharePreviewAssetType = "stream" | "text" | "thumbnail";
 
 export interface IShareService {
+  deleteShareFile: (input: unknown) => Promise<DeleteShareFileOutput>;
   listShares: () => Promise<ListSharesOutput>;
   createShare: (input: unknown) => Promise<ShareDto>;
   uploadShare: (input: unknown) => Promise<UploadShareOutput>;
@@ -57,6 +62,25 @@ export class ShareService implements IShareService {
       files,
     ),
   ) {}
+
+  async deleteShareFile(input: unknown): Promise<DeleteShareFileOutput> {
+    const parsed = DeleteShareFileInputSchema.parse(
+      input,
+    ) satisfies DeleteShareFileInput;
+    const share = await this.repository.findRecordById(parsed.shareId);
+
+    if (!share) {
+      throw new AppError(ErrorCode.NotFound, "Share was not found.", 404);
+    }
+
+    await this.files.deleteUploadedFile(share.filePath);
+    await this.files.deletePreviewDirectory(share.id);
+    await this.repository.delete(share.id);
+
+    return DeleteShareFileOutputSchema.parse({
+      shareId: share.id,
+    });
+  }
 
   async listShares(): Promise<ListSharesOutput> {
     const shares = await this.repository.list();

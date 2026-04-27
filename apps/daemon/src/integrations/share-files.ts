@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, unlink } from "node:fs/promises";
 import { basename, extname, resolve, sep } from "node:path";
 import { z } from "zod";
 
@@ -28,6 +28,8 @@ export type StoredUploadedShareFile = ResolvedShareFile & {
 
 export interface ShareFileIntegration {
   createPreviewDirectory: (shareId: string) => Promise<string>;
+  deletePreviewDirectory: (shareId: string) => Promise<void>;
+  deleteUploadedFile: (filePath: string) => Promise<void>;
   resolveFile: (filePath: string) => Promise<ResolvedShareFile>;
   readFileBody: (filePath: string) => Promise<Blob>;
   storeUploadedFile: (file: File) => Promise<StoredUploadedShareFile>;
@@ -55,6 +57,45 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
     await mkdir(previewDir, { recursive: true });
 
     return previewDir;
+  }
+
+  async deletePreviewDirectory(shareId: string): Promise<void> {
+    const previewDir = this.getPreviewDirectory(shareId);
+
+    if (!this.isInsideShareRoot(previewDir)) {
+      throw new AppError(
+        ErrorCode.Forbidden,
+        "Preview destination is outside configured share roots.",
+        403,
+      );
+    }
+
+    await rm(previewDir, {
+      force: true,
+      recursive: true,
+    });
+  }
+
+  async deleteUploadedFile(filePath: string): Promise<void> {
+    const absolutePath = resolve(filePath);
+
+    if (!this.isUploadedFilePath(absolutePath)) {
+      throw new AppError(
+        ErrorCode.Forbidden,
+        "Only Beacon-uploaded files can be deleted from this action.",
+        403,
+      );
+    }
+
+    try {
+      await unlink(absolutePath);
+    } catch (error) {
+      if (isFileNotFoundError(error)) {
+        return;
+      }
+
+      throw error;
+    }
   }
 
   async resolveFile(filePath: string): Promise<ResolvedShareFile> {
@@ -142,6 +183,16 @@ export class LocalShareFileIntegration implements ShareFileIntegration {
 
     return resolve(this.roots[0].path, "uploads", year, month, day);
   }
+
+  private getPreviewDirectory(shareId: string) {
+    return resolve(this.roots[0].path, ".beacon", "previews", shareId);
+  }
+
+  private isUploadedFilePath(absolutePath: string) {
+    const uploadRoot = resolve(this.roots[0].path, "uploads");
+
+    return absolutePath.startsWith(`${uploadRoot}${sep}`);
+  }
 }
 
 export function createShareFileIntegration(): ShareFileIntegration {
@@ -220,4 +271,13 @@ function isUnsafeFileNameCharacter(character: string) {
   const code = character.charCodeAt(0);
 
   return code < 32 || code === 127 || '/\\?%*:|"<>'.includes(character);
+}
+
+function isFileNotFoundError(error: unknown) {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }

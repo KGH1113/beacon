@@ -46,7 +46,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/utils";
 
-import { revokeShareAction } from "./shares.actions";
+import { deleteShareFileAction, revokeShareAction } from "./shares.actions";
 import { useShareUpload } from "./shares.hooks";
 import {
   type ShareFilter,
@@ -131,6 +131,16 @@ export function SharesPage({
         share.id === updatedShare.id ? updatedShare : share,
       ),
     );
+  }
+
+  function removeShare(shareId: string) {
+    setShares((currentShares) =>
+      currentShares.filter((share) => share.id !== shareId),
+    );
+
+    if (selectedShareId === shareId) {
+      setSelectedShareId(null);
+    }
   }
 
   function addUploadedShare(uploadedShare: ShareDto) {
@@ -221,6 +231,7 @@ export function SharesPage({
 
         <ShareDetailCard
           daemonPublicBaseUrl={daemonPublicBaseUrl}
+          onShareDeleted={removeShare}
           onShareUpdated={updateShare}
           share={selectedShare}
         />
@@ -352,10 +363,12 @@ function SharesTableCard({
 
 function ShareDetailCard({
   daemonPublicBaseUrl,
+  onShareDeleted,
   onShareUpdated,
   share,
 }: {
   daemonPublicBaseUrl: string;
+  onShareDeleted: (shareId: string) => void;
   onShareUpdated: (share: ShareDto) => void;
   share: ShareDto | null;
 }) {
@@ -401,6 +414,22 @@ function ShareDetailCard({
         }
 
         toast.info("Share revoked");
+        return;
+      }
+
+      toast.error(result.message);
+    });
+  }
+
+  function deleteShareFile() {
+    startTransition(async () => {
+      const result = await deleteShareFileAction({
+        shareId: selectedShare.id,
+      });
+
+      if (result.ok && result.shareId) {
+        onShareDeleted(result.shareId);
+        toast.info("File deleted");
         return;
       }
 
@@ -469,6 +498,32 @@ function ShareDetailCard({
                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                 <AlertDialogAction onClick={revokeShare} variant="destructive">
                   Revoke
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button disabled={isPending} type="button" variant="destructive">
+                Delete file
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete uploaded file?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  원본 파일과 preview artifact를 삭제하고, 이 공유 항목도
+                  목록에서 제거합니다. Beacon에서 업로드한 파일만 삭제할 수
+                  있습니다.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={deleteShareFile}
+                  variant="destructive"
+                >
+                  Delete file
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
