@@ -134,20 +134,23 @@ export function useDockerExecSession(
   const [terminalElement, setTerminalElement] = useState<HTMLDivElement | null>(
     null,
   );
+  const containerId = container?.id ?? null;
+  const containerName = container?.name ?? "";
+  const defaultShell = container?.defaultShell ?? "/bin/sh";
 
   const websocketUrl = useMemo(() => {
-    if (!container) {
+    if (!containerId) {
       return null;
     }
 
     return toWebSocketUrl(
       daemonBaseUrl,
-      `/api/v1/docker/containers/${encodeURIComponent(container.id)}/exec`,
+      `/api/v1/docker/containers/${encodeURIComponent(containerId)}/exec`,
     );
-  }, [container, daemonBaseUrl]);
+  }, [containerId, daemonBaseUrl]);
 
   useEffect(() => {
-    if (!enabled || !container || !terminalElement || !websocketUrl) {
+    if (!enabled || !containerId || !terminalElement || !websocketUrl) {
       setConnected(false);
       setShellConnected(false);
       return;
@@ -175,10 +178,8 @@ export function useDockerExecSession(
     terminal.loadAddon(fitAddon);
     terminal.open(terminalElement);
     fitAddon.fit();
-    terminal.writeln(`Connecting to ${container.name}...`);
-    terminal.writeln(
-      `docker exec -i ${container.name} ${container.defaultShell}`,
-    );
+    terminal.writeln(`Connecting to ${containerName}...`);
+    terminal.writeln(`docker exec -i ${containerName} ${defaultShell}`);
 
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
@@ -194,7 +195,7 @@ export function useDockerExecSession(
       const parsed = DockerExecOutputDtoSchema.parse(JSON.parse(event.data));
 
       terminal.write(
-        formatDockerExecOutput(parsed.payload.data, container.name),
+        formatDockerExecOutput(parsed.payload.data, containerName),
       );
     };
 
@@ -251,7 +252,15 @@ export function useDockerExecSession(
       setConnected(false);
       setShellConnected(false);
     };
-  }, [container, enabled, setShellConnected, terminalElement, websocketUrl]);
+  }, [
+    containerId,
+    containerName,
+    defaultShell,
+    enabled,
+    setShellConnected,
+    terminalElement,
+    websocketUrl,
+  ]);
 
   return {
     connected,
