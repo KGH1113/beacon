@@ -1,11 +1,21 @@
 "use client";
 
 import type { ShareDto } from "@beacon/shared";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { mockShares } from "./shares.lib";
-import { UploadShareOutputSchema } from "./shares.schema";
+import {
+  ShareRealtimeEventDtoSchema,
+  UploadShareOutputSchema,
+} from "./shares.schema";
 import { useSharesStore } from "./shares.store";
+
+export type SharesStreamStatus =
+  | "mock"
+  | "connecting"
+  | "live"
+  | "reconnecting";
 
 export function useShares() {
   return {
@@ -18,6 +28,103 @@ export function useShares() {
 export function useCreateShare() {
   return {
     isPending: false,
+  };
+}
+
+export function useSharesStream(
+  initialShares: ShareDto[],
+  isFallback: boolean,
+  daemonStreamBaseUrl: string,
+) {
+  const [shares, setShares] = useState(initialShares);
+  const [status, setStatus] = useState<SharesStreamStatus>(
+    isFallback ? "mock" : "connecting",
+  );
+
+  useEffect(() => {
+    setShares(initialShares);
+  }, [initialShares]);
+
+  useEffect(() => {
+    if (isFallback) {
+      setStatus("mock");
+      return;
+    }
+
+    const url = new URL("/api/v1/share/stream", daemonStreamBaseUrl);
+    const eventSource = new EventSource(url);
+
+    setStatus("connecting");
+
+    eventSource.onopen = () => {
+      setStatus("live");
+    };
+
+    eventSource.onerror = () => {
+      setStatus("reconnecting");
+    };
+
+    const handleShareEvent = (event: MessageEvent<string>) => {
+      const parsed = ShareRealtimeEventDtoSchema.safeParse(
+        parseSseJson(event.data),
+      );
+
+      if (!parsed.success) {
+        setStatus("reconnecting");
+        return;
+      }
+
+      setStatus("live");
+
+      if (parsed.data.type === "share.snapshot") {
+        setShares(parsed.data.payload.shares);
+        return;
+      }
+
+      if (parsed.data.type === "share.upsert") {
+        upsertShare(parsed.data.payload.share);
+        return;
+      }
+
+      deleteShare(parsed.data.payload.shareId);
+    };
+
+    eventSource.addEventListener("share.snapshot", handleShareEvent);
+    eventSource.addEventListener("share.upsert", handleShareEvent);
+    eventSource.addEventListener("share.delete", handleShareEvent);
+
+    return () => {
+      eventSource.close();
+    };
+  }, [daemonStreamBaseUrl, isFallback]);
+
+  function upsertShare(nextShare: ShareDto) {
+    setShares((currentShares) => {
+      const existingIndex = currentShares.findIndex(
+        (share) => share.id === nextShare.id,
+      );
+
+      if (existingIndex === -1) {
+        return [nextShare, ...currentShares];
+      }
+
+      return currentShares.map((share) =>
+        share.id === nextShare.id ? nextShare : share,
+      );
+    });
+  }
+
+  function deleteShare(shareId: string) {
+    setShares((currentShares) =>
+      currentShares.filter((share) => share.id !== shareId),
+    );
+  }
+
+  return {
+    deleteShare,
+    shares,
+    status,
+    upsertShare,
   };
 }
 
@@ -156,4 +263,12 @@ function uploadShareFile({
       }
     }
   });
+}
+
+function parseSseJson(data: string) {
+  try {
+    return JSON.parse(data);
+  } catch {
+    return undefined;
+  }
 }

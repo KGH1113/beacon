@@ -11,6 +11,7 @@ export const shareRoute = new Elysia({
 })
   .onError(({ error, set }) => handleShareError(error, set))
   .get("", () => shareController.list())
+  .get("/stream", ({ request }) => shareController.stream(request.signal))
   .post("/upload", ({ body }) => shareController.upload(body))
   .post("", ({ body }) => shareController.create(body))
   .delete("/:id/file", ({ params }) => shareController.deleteFile(params.id))

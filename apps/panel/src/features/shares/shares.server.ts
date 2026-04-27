@@ -11,6 +11,7 @@ import { mockShares } from "./shares.lib";
 
 export async function fetchSharesForSsr() {
   const env = getPanelEnv();
+  const daemonStreamBaseUrl = getDaemonClientBaseUrl(env);
   const daemonUploadBaseUrl = getDaemonClientBaseUrl(env);
   const daemonPublicBaseUrl = getSharePublicBaseUrl(env);
 
@@ -23,6 +24,7 @@ export async function fetchSharesForSsr() {
 
     return {
       daemonPublicBaseUrl,
+      daemonStreamBaseUrl,
       daemonUploadBaseUrl,
       isFallback: false,
       shares: output.shares,
@@ -30,6 +32,7 @@ export async function fetchSharesForSsr() {
   } catch {
     return {
       daemonPublicBaseUrl,
+      daemonStreamBaseUrl,
       daemonUploadBaseUrl,
       isFallback: true,
       shares: mockShares,

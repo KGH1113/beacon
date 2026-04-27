@@ -47,7 +47,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/utils";
 
 import { deleteShareFileAction, revokeShareAction } from "./shares.actions";
-import { useShareUpload } from "./shares.hooks";
+import { useShareUpload, useSharesStream } from "./shares.hooks";
 import {
   type ShareFilter,
   filterShares,
@@ -81,6 +81,7 @@ const previewIconByKind = {
 
 type SharesPageProps = {
   daemonPublicBaseUrl: string;
+  daemonStreamBaseUrl: string;
   daemonUploadBaseUrl: string;
   initialShares: ShareDto[];
   isFallback: boolean;
@@ -88,6 +89,7 @@ type SharesPageProps = {
 
 export function SharesPage({
   daemonPublicBaseUrl,
+  daemonStreamBaseUrl,
   daemonUploadBaseUrl,
   initialShares,
   isFallback,
@@ -101,7 +103,12 @@ export function SharesPage({
   const dragDepthRef = useRef(0);
   const isMountedRef = useRef(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
-  const [shares, setShares] = useState(initialShares);
+  const {
+    deleteShare,
+    shares,
+    status: streamStatus,
+    upsertShare,
+  } = useSharesStream(initialShares, isFallback, daemonStreamBaseUrl);
   const { uploadFiles } = useShareUpload({
     daemonUploadBaseUrl,
     onShareUploaded: addUploadedShare,
@@ -125,18 +132,21 @@ export function SharesPage({
     };
   }, []);
 
+  useEffect(() => {
+    if (
+      selectedShareId &&
+      !shares.some((share) => share.id === selectedShareId)
+    ) {
+      setSelectedShareId(null);
+    }
+  }, [selectedShareId, setSelectedShareId, shares]);
+
   function updateShare(updatedShare: ShareDto) {
-    setShares((currentShares) =>
-      currentShares.map((share) =>
-        share.id === updatedShare.id ? updatedShare : share,
-      ),
-    );
+    upsertShare(updatedShare);
   }
 
   function removeShare(shareId: string) {
-    setShares((currentShares) =>
-      currentShares.filter((share) => share.id !== shareId),
-    );
+    deleteShare(shareId);
 
     if (selectedShareId === shareId) {
       setSelectedShareId(null);
@@ -148,10 +158,7 @@ export function SharesPage({
       return;
     }
 
-    setShares((currentShares) => [
-      uploadedShare,
-      ...currentShares.filter((share) => share.id !== uploadedShare.id),
-    ]);
+    upsertShare(uploadedShare);
     setSelectedShareId(uploadedShare.id);
   }
 
@@ -205,7 +212,11 @@ export function SharesPage({
             : getSharesDescription()
         }
         status={{
-          label: isFallback ? "Mock" : `${summary.activeCount} active`,
+          label: getHeaderStatusLabel({
+            activeCount: summary.activeCount,
+            isFallback,
+            streamStatus,
+          }),
           className: isFallback
             ? "bg-chart-5/20 text-chart-5"
             : "bg-chart-2/20 text-chart-2",
@@ -252,6 +263,26 @@ function ShareDropOverlay() {
       </CardContent>
     </Card>
   );
+}
+
+function getHeaderStatusLabel({
+  activeCount,
+  isFallback,
+  streamStatus,
+}: {
+  activeCount: number;
+  isFallback: boolean;
+  streamStatus: "mock" | "connecting" | "live" | "reconnecting";
+}) {
+  if (isFallback || streamStatus === "mock") {
+    return "Mock";
+  }
+
+  if (streamStatus === "reconnecting") {
+    return "Reconnecting";
+  }
+
+  return `${activeCount} active`;
 }
 
 function SummaryCard({ label, value }: { label: string; value: number }) {

@@ -2,14 +2,21 @@ import type {
   DeleteShareFileOutput,
   ListSharesOutput,
   ShareDto,
+  ShareRealtimeEventDto,
   UploadShareOutput,
 } from "@beacon/shared";
 
+import {
+  type ShareRealtimeBroadcaster,
+  shareRealtimeBroadcaster,
+} from "./share.realtime";
 import {
   type IShareService,
   type ShareFileAsset,
   ShareService,
 } from "./share.service";
+
+const shareStreamHeartbeatIntervalMs = 25_000;
 
 export interface IShareController {
   deleteFile: (shareId: string) => Promise<DeleteShareFileOutput>;
@@ -17,6 +24,7 @@ export interface IShareController {
   create: (input: unknown) => Promise<ShareDto>;
   upload: (input: unknown) => Promise<UploadShareOutput>;
   revoke: (shareId: string) => Promise<ShareDto>;
+  stream: (signal: AbortSignal) => Response;
   download: (token: string) => Promise<Response>;
   previewStream: (
     token: string,
@@ -36,7 +44,10 @@ type StreamHeadResponse = {
 };
 
 export class ShareController implements IShareController {
-  constructor(private readonly service: IShareService = new ShareService()) {}
+  constructor(
+    private readonly service: IShareService = new ShareService(),
+    private readonly realtime: ShareRealtimeBroadcaster = shareRealtimeBroadcaster,
+  ) {}
 
   async deleteFile(shareId: string): Promise<DeleteShareFileOutput> {
     return this.service.deleteShareFile({ shareId });
@@ -56,6 +67,94 @@ export class ShareController implements IShareController {
 
   async revoke(shareId: string): Promise<ShareDto> {
     return this.service.revokeShare({ shareId });
+  }
+
+  stream(signal: AbortSignal): Response {
+    const encoder = new TextEncoder();
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    let unsubscribe: (() => void) | undefined;
+    let isClosed = false;
+
+    const stream = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        const close = () => {
+          if (isClosed) {
+            return;
+          }
+
+          isClosed = true;
+          unsubscribe?.();
+
+          if (heartbeat) {
+            clearInterval(heartbeat);
+          }
+
+          controller.close();
+        };
+
+        const sendEvent = (event: ShareRealtimeEventDto) => {
+          if (isClosed) {
+            return;
+          }
+
+          controller.enqueue(encoder.encode(formatSseEvent(event)));
+        };
+
+        const sendSnapshot = async () => {
+          try {
+            const snapshot = await this.service.listShares();
+
+            sendEvent({
+              type: "share.snapshot",
+              timestamp: new Date().toISOString(),
+              payload: snapshot,
+            });
+          } catch {
+            if (!isClosed) {
+              controller.enqueue(
+                encoder.encode(
+                  [
+                    "event: share.error",
+                    `data: ${JSON.stringify({
+                      message: "Failed to list shares.",
+                      timestamp: new Date().toISOString(),
+                    })}`,
+                    "",
+                    "",
+                  ].join("\n"),
+                ),
+              );
+            }
+          }
+        };
+
+        unsubscribe = this.realtime.subscribe(sendEvent);
+        signal.addEventListener("abort", close, { once: true });
+        void sendSnapshot();
+        heartbeat = setInterval(() => {
+          if (!isClosed) {
+            controller.enqueue(encoder.encode(": heartbeat\n\n"));
+          }
+        }, shareStreamHeartbeatIntervalMs);
+      },
+      cancel: () => {
+        isClosed = true;
+        unsubscribe?.();
+
+        if (heartbeat) {
+          clearInterval(heartbeat);
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "X-Accel-Buffering": "no",
+      },
+    });
   }
 
   async download(token: string): Promise<Response> {
@@ -103,6 +202,15 @@ export class ShareController implements IShareController {
 
     return createInlineFileResponse(file);
   }
+}
+
+function formatSseEvent(event: ShareRealtimeEventDto): string {
+  return [
+    `event: ${event.type}`,
+    `data: ${JSON.stringify(event)}`,
+    "",
+    "",
+  ].join("\n");
 }
 
 function createInlineFileResponse(file: {

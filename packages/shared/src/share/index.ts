@@ -43,6 +43,28 @@ export const ListSharesOutputSchema = z.object({
   shares: z.array(ShareDtoSchema),
 });
 
+export const ShareRealtimeEventDtoSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("share.snapshot"),
+    timestamp: IsoDatetimeStringSchema,
+    payload: ListSharesOutputSchema,
+  }),
+  z.object({
+    type: z.literal("share.upsert"),
+    timestamp: IsoDatetimeStringSchema,
+    payload: z.object({
+      share: ShareDtoSchema,
+    }),
+  }),
+  z.object({
+    type: z.literal("share.delete"),
+    timestamp: IsoDatetimeStringSchema,
+    payload: z.object({
+      shareId: IdSchema,
+    }),
+  }),
+]);
+
 export const UploadShareMetadataSchema = z.object({
   expiresAt: IsoDatetimeStringSchema.nullable().optional(),
 });
@@ -75,6 +97,7 @@ export type SharePreviewKind = z.infer<typeof SharePreviewKindSchema>;
 export type SharePreviewStatus = z.infer<typeof SharePreviewStatusSchema>;
 export type ShareStatus = z.infer<typeof ShareStatusSchema>;
 export type ListSharesOutput = z.infer<typeof ListSharesOutputSchema>;
+export type ShareRealtimeEventDto = z.infer<typeof ShareRealtimeEventDtoSchema>;
 export type UploadShareMetadata = z.infer<typeof UploadShareMetadataSchema>;
 export type UploadShareOutput = z.infer<typeof UploadShareOutputSchema>;
 export type CreateShareInput = z.infer<typeof CreateShareInputSchema>;

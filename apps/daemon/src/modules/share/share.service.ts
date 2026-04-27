@@ -31,6 +31,10 @@ import {
 } from "../../integrations/share-previews";
 import { AppError } from "../../shared/errors/app-error";
 import { ErrorCode } from "../../shared/errors/error-code";
+import {
+  type ShareRealtimeBroadcaster,
+  shareRealtimeBroadcaster,
+} from "./share.realtime";
 
 export type ShareDownload = {
   absolutePath: string;
@@ -65,6 +69,7 @@ export class ShareService implements IShareService {
     private readonly previews: SharePreviewIntegration = createSharePreviewIntegration(
       files,
     ),
+    private readonly realtime: ShareRealtimeBroadcaster = shareRealtimeBroadcaster,
   ) {}
 
   async deleteShareFile(input: unknown): Promise<DeleteShareFileOutput> {
@@ -80,6 +85,7 @@ export class ShareService implements IShareService {
     await this.files.deleteSharedFile(share.filePath);
     await this.files.deletePreviewDirectory(share.id);
     await this.repository.delete(share.id);
+    this.realtime.publishDelete(share.id);
 
     return DeleteShareFileOutputSchema.parse({
       shareId: share.id,
@@ -106,6 +112,7 @@ export class ShareService implements IShareService {
       share,
       file.absolutePath,
     );
+    this.realtime.publishUpsert(updatedShare);
 
     return ShareDtoSchema.parse(updatedShare);
   }
@@ -126,6 +133,7 @@ export class ShareService implements IShareService {
       share,
       file.absolutePath,
     );
+    this.realtime.publishUpsert(updatedShare);
 
     return UploadShareOutputSchema.parse({ share: updatedShare });
   }
@@ -140,13 +148,19 @@ export class ShareService implements IShareService {
       throw new AppError(ErrorCode.NotFound, "Share was not found.", 404);
     }
 
+    this.realtime.publishUpsert(share);
+
     return ShareDtoSchema.parse(share);
   }
 
   async getDownload(token: string): Promise<ShareDownload> {
     const share = await this.getActiveShareRecord(token);
     const file = await this.files.resolveFile(share.filePath);
-    await this.repository.incrementDownloadCount(share.id);
+    const updatedShare = await this.repository.incrementDownloadCount(share.id);
+
+    if (updatedShare) {
+      this.realtime.publishUpsert(updatedShare);
+    }
 
     return {
       absolutePath: file.absolutePath,

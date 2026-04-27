@@ -7,6 +7,7 @@ export {
   ShareDtoSchema,
   SharePreviewDtoSchema,
   SharePreviewKindSchema,
+  ShareRealtimeEventDtoSchema,
   ShareStatusSchema,
   UploadShareOutputSchema,
 } from "@beacon/shared";
