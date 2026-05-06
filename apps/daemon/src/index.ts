@@ -13,6 +13,7 @@ export function startDaemon() {
 
   const internalServer = internalApp.listen({
     hostname: env.BEACON_DAEMON_HOST,
+    maxRequestBodySize: env.BEACON_DAEMON_MAX_REQUEST_BODY_SIZE_BYTES,
     port: env.BEACON_DAEMON_PORT,
   });
   const publicShareServer = publicShareApp.listen({
